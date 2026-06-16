@@ -125,6 +125,7 @@ Common variables:
 | `MINI_AGENT_TOOLS__MCP__HEARTBEAT_INTERVAL` | MCP heartbeat interval (seconds) | `30.0` |
 | `MINI_AGENT_TOOLS__MCP__MAX_RECONNECT_ATTEMPTS` | MCP reconnect attempts | `3` |
 | `MINI_AGENT_TOOLS__MCP__RECONNECT_DELAY` | MCP reconnect delay (milliseconds) | `1000` |
+| `MINI_AGENT_TOOLS__MAX_TOOL_RESULT_TOKENS` | Truncate tool results to this token budget | `8000` |
 
 Configuration loading priority (highest to lowest):
 
@@ -170,6 +171,21 @@ Configure retry behavior:
 retry:
   enabled: true
   maxRetries: 3
+```
+
+### Performance and Context Management
+
+- **Token-based truncation**: Tool results are truncated by token count (not hard-coded characters) before being sent to the LLM. Configure the budget with `tools.maxToolResultTokens`.
+- **Context budgets**: Before every LLM call, the agent enforces `history.maxHistoryTokens` by compressing older non-system messages. Large tool results live outside the system prompt and are subject to truncation and history compression.
+- **Concurrent tool calls**: When the LLM requests multiple tools in one step, the agent runs them in parallel and preserves their declaration order in the conversation history.
+
+```yaml
+tools:
+  maxToolResultTokens: 8000 # Truncate oversized tool results to this many tokens
+
+history:
+  autoSave: true
+  maxHistoryTokens: 8000 # 0 = unlimited
 ```
 
 ### MCP Connection Management

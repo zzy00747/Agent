@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { glob } from 'fast-glob';
+import { truncateTextByTokens } from '../util/truncate.js';
 import type { Tool, ToolResult } from './base.js';
 
 type ReadFileInput = {
@@ -32,38 +33,6 @@ function resolvePath(workspaceDir: string, targetPath: string): string {
     return targetPath;
   }
   return path.resolve(workspaceDir, targetPath);
-}
-
-/**
- * Truncate long content with a head/tail strategy based on a token estimate.
- */
-function truncateTextByTokens(text: string, maxTokens: number): string {
-  if (!text) {
-    return text;
-  }
-
-  const estimatedTokens = Math.max(1, Math.ceil(text.length / 4));
-  if (estimatedTokens <= maxTokens) {
-    return text;
-  }
-
-  const ratio = estimatedTokens / text.length;
-  const charsPerHalf = Math.max(1, Math.floor((maxTokens / 2 / ratio) * 0.95));
-
-  let headPart = text.slice(0, charsPerHalf);
-  const lastNewlineHead = headPart.lastIndexOf('\n');
-  if (lastNewlineHead > 0) {
-    headPart = headPart.slice(0, lastNewlineHead);
-  }
-
-  let tailPart = text.slice(-charsPerHalf);
-  const firstNewlineTail = tailPart.indexOf('\n');
-  if (firstNewlineTail > 0) {
-    tailPart = tailPart.slice(firstNewlineTail + 1);
-  }
-
-  const truncationNote = `\n\n... [Content truncated: ~${estimatedTokens} tokens -> ~${maxTokens} tokens limit] ...\n\n`;
-  return headPart + truncationNote + tailPart;
 }
 
 export class ReadTool implements Tool<ReadFileInput> {

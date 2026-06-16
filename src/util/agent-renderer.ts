@@ -1,4 +1,5 @@
 import type { ToolResult } from '../tools/base.js';
+import { truncateTextByTokens } from './truncate.js';
 import { Colors, drawStepHeader } from './terminal.js';
 
 /**
@@ -40,7 +41,7 @@ export class NoopRenderer implements AgentRenderer {
 
 const SEPARATOR = `${Colors.DIM}─${'─'.repeat(60)}${Colors.RESET}`;
 const MAX_ARG_LENGTH = 200;
-const MAX_RESULT_LENGTH = 300;
+const MAX_DISPLAY_RESULT_TOKENS = 75; // ≈ 300 characters
 
 /**
  * Default terminal renderer. Reproduces the original CLI output style:
@@ -118,15 +119,15 @@ export class TerminalAgentRenderer implements AgentRenderer {
 
   onToolResult(_name: string, result: ToolResult): void {
     if (result.success) {
-      let resultText = result.content;
-      if (resultText.length > MAX_RESULT_LENGTH) {
-        resultText = `${resultText.slice(
-          0,
-          MAX_RESULT_LENGTH
-        )}${Colors.DIM}...${Colors.RESET}`;
-      }
+      const resultText = truncateTextByTokens(
+        result.content,
+        MAX_DISPLAY_RESULT_TOKENS,
+        'tail'
+      );
+      const suffix =
+        resultText === result.content ? '' : `${Colors.DIM}...${Colors.RESET}`;
       console.log(
-        `${Colors.BRIGHT_GREEN}✓${Colors.RESET} ${Colors.BOLD}${Colors.BRIGHT_GREEN}Success:${Colors.RESET} ${resultText}\n`
+        `${Colors.BRIGHT_GREEN}✓${Colors.RESET} ${Colors.BOLD}${Colors.BRIGHT_GREEN}Success:${Colors.RESET} ${resultText}${suffix}\n`
       );
     } else {
       console.log(

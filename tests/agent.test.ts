@@ -283,6 +283,132 @@ describe('Agent', () => {
     fs.rmSync(workspace, { recursive: true, force: true });
   });
 
+  it('truncates oversized tool results before adding to history', async () => {
+    const workspace = makeWorkspace();
+
+    class LongResultTool implements Tool<{ input: string }> {
+      name = 'long_tool';
+      description = 'Returns a long result';
+      parameters = {
+        type: 'object' as const,
+        properties: {
+          input: { type: 'string', description: 'Input text' },
+        },
+        required: ['input'],
+      };
+
+      async execute(): Promise<ToolResult> {
+        return { success: true, content: 'x'.repeat(4000) };
+      }
+    }
+
+    const toolCall: ToolCall = {
+      id: 'call-1',
+      type: 'function',
+      function: {
+        name: 'long_tool',
+        arguments: { input: 'x' },
+      },
+    };
+
+    const client = new MockLLMClient([
+      [{ tool_calls: [toolCall], done: true }],
+      [{ content: 'Done', done: true }],
+    ]);
+
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [new LongResultTool()],
+      10,
+      workspace,
+      new NoopRenderer(),
+      { enabled: true, maxRetries: 3 },
+      { maxToolResultTokens: 100 }
+    );
+
+    agent.addUserMessage('Use long tool');
+    const result = await agent.run();
+
+    expect(result).toBe('Done');
+    const toolMessage = agent.messages.find((m) => m.role === 'tool');
+    expect(toolMessage).toBeDefined();
+    expect(toolMessage!.content).toContain('[Content truncated');
+    expect(toolMessage!.content.length).toBeLessThan(4000);
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('executes multiple tool calls concurrently', async () => {
+    const workspace = makeWorkspace();
+
+    class ConcurrentTool implements Tool<{ input: string }> {
+      name = 'concurrent_tool';
+      description = 'Tracks concurrent execution';
+      parameters = {
+        type: 'object' as const,
+        properties: {
+          input: { type: 'string', description: 'Input text' },
+        },
+        required: ['input'],
+      };
+
+      static running = 0;
+      static maxRunning = 0;
+
+      async execute(): Promise<ToolResult> {
+        ConcurrentTool.running += 1;
+        ConcurrentTool.maxRunning = Math.max(
+          ConcurrentTool.maxRunning,
+          ConcurrentTool.running
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        ConcurrentTool.running -= 1;
+        return { success: true, content: 'ok' };
+      }
+    }
+
+    ConcurrentTool.running = 0;
+    ConcurrentTool.maxRunning = 0;
+
+    const toolCalls: ToolCall[] = [
+      {
+        id: 'call-1',
+        type: 'function',
+        function: { name: 'concurrent_tool', arguments: { input: 'a' } },
+      },
+      {
+        id: 'call-2',
+        type: 'function',
+        function: { name: 'concurrent_tool', arguments: { input: 'b' } },
+      },
+    ];
+
+    const client = new MockLLMClient([
+      [{ tool_calls: toolCalls, done: true }],
+      [{ content: 'Done', done: true }],
+    ]);
+
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [new ConcurrentTool()],
+      10,
+      workspace,
+      new NoopRenderer()
+    );
+
+    agent.addUserMessage('Run two tools');
+    const result = await agent.run();
+
+    expect(result).toBe('Done');
+    expect(ConcurrentTool.maxRunning).toBe(2);
+    const toolMessages = agent.messages.filter((m) => m.role === 'tool');
+    expect(toolMessages).toHaveLength(2);
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
   it('retries LLM stream failures', async () => {
     const workspace = makeWorkspace();
 

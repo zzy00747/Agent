@@ -43,6 +43,7 @@ describe('Config', () => {
     expect(config.agent.maxSteps).toBe(50);
     expect(config.history.autoSave).toBe(true);
     expect(config.history.maxHistoryTokens).toBe(0);
+    expect(config.tools.maxToolResultTokens).toBe(8000);
     expect(config.tools.security.bash.allowDangerousCommands).toBe(false);
   });
 
@@ -64,6 +65,7 @@ describe('Config', () => {
         '  autoSave: false',
         '  maxHistoryTokens: 4000',
         'tools:',
+        '  maxToolResultTokens: 2000',
         '  security:',
         '    bash:',
         '      allowDangerousCommands: true',
@@ -82,6 +84,7 @@ describe('Config', () => {
     expect(config.llm.retry.maxRetries).toBe(1);
     expect(config.history.autoSave).toBe(false);
     expect(config.history.maxHistoryTokens).toBe(4000);
+    expect(config.tools.maxToolResultTokens).toBe(2000);
     expect(config.tools.security.bash.allowDangerousCommands).toBe(true);
   });
 

@@ -2,6 +2,10 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Logger } from './util/logger.js';
 import { NoopRenderer, type AgentRenderer } from './util/agent-renderer.js';
+import {
+  prepareMessages,
+  type ContextManagerOptions,
+} from './util/context-manager.js';
 import { withRetry } from './util/retry.js';
 import { LLMClient } from './llm-client/llm-client.js';
 import type { RetryConfig } from './config.js';
@@ -28,6 +32,7 @@ export class Agent {
   public tools: Map<string, Tool>;
   private renderer: AgentRenderer;
   private retryConfig: RetryConfig;
+  private contextOptions: ContextManagerOptions;
 
   constructor(
     llmClient: LLMClient,
@@ -36,13 +41,15 @@ export class Agent {
     maxSteps: number,
     workspaceDir: string,
     renderer?: AgentRenderer,
-    retryConfig?: RetryConfig
+    retryConfig?: RetryConfig,
+    contextOptions?: ContextManagerOptions
   ) {
     this.llmClient = llmClient;
     this.maxSteps = maxSteps;
     this.tools = new Map();
     this.renderer = renderer ?? new NoopRenderer();
     this.retryConfig = retryConfig ?? { enabled: true, maxRetries: 3 };
+    this.contextOptions = contextOptions ?? {};
 
     // Ensure workspace exists
     this.workspaceDir = path.resolve(workspaceDir);
@@ -138,6 +145,10 @@ export class Agent {
     for (let step = 0; step < this.maxSteps; step++) {
       this.renderer.onStepStart(step + 1, this.maxSteps);
 
+      // Enforce context budgets before each LLM call. Large tool results live
+      // outside the system prompt and are truncated/compressed here.
+      this.messages = prepareMessages(this.messages, this.contextOptions);
+
       const toolList = this.listTools();
 
       const runStream = async (): Promise<{
@@ -216,15 +227,27 @@ export class Agent {
         return fullContent;
       }
 
-      for (const toolCall of toolCalls) {
-        const toolCallId = toolCall.id;
-        const functionName = toolCall.function.name;
-        const args = toolCall.function.arguments || {};
+      // Execute independent tool calls concurrently while preserving the
+      // original declaration order in the conversation history.
+      const toolResults = await Promise.all(
+        toolCalls.map(async (toolCall) => {
+          const toolCallId = toolCall.id;
+          const functionName = toolCall.function.name;
+          const args = toolCall.function.arguments || {};
 
-        this.renderer.onToolCall(functionName, args);
-        const result = await this.executeTool(functionName, args);
-        this.renderer.onToolResult(functionName, result);
+          this.renderer.onToolCall(functionName, args);
+          const result = await this.executeTool(functionName, args);
+          this.renderer.onToolResult(functionName, result);
 
+          return {
+            toolCallId,
+            functionName,
+            result,
+          };
+        })
+      );
+
+      for (const { toolCallId, functionName, result } of toolResults) {
         this.messages.push({
           role: 'tool',
           content: result.success

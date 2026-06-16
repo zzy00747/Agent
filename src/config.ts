@@ -41,6 +41,7 @@ const DEFAULTS = {
   TOOLS: {
     skillsDir: './skills',
     mcpConfigPath: 'mcp.json',
+    maxToolResultTokens: 8000,
     mcp: {
       connectTimeout: 10.0,
       executeTimeout: 60.0,
@@ -96,6 +97,7 @@ const ToolsSecuritySchema = z.object({
 const ToolsSchema = z.object({
   skillsDir: z.string().default(DEFAULTS.TOOLS.skillsDir),
   mcpConfigPath: z.string().default(DEFAULTS.TOOLS.mcpConfigPath),
+  maxToolResultTokens: z.number().default(DEFAULTS.TOOLS.maxToolResultTokens),
   mcp: MCPSchema.default(DEFAULTS.MCP),
   security: ToolsSecuritySchema.default({
     bash: {

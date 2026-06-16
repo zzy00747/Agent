@@ -135,9 +135,12 @@ tools:
     heartbeatInterval: 30.0 # seconds, 0 disables keepalive
     maxReconnectAttempts: 3
     reconnectDelay: 1000 # milliseconds
+  maxToolResultTokens: 8000 # Truncate oversized tool results before sending to the LLM
 ```
 
 MCP servers are configured in `config/mcp.json` (copy from `config/mcp-example.json`). Supported connection types are `stdio`, `sse`, `http`, and `streamable_http`. The connection manager sends periodic heartbeat pings, reconnects automatically on connection failures, and closes all connections on process exit.
+
+Before every LLM call, the agent prepares the message context: oversized `tool` results are truncated to `tools.maxToolResultTokens`, and the full history is compressed if it exceeds `history.maxHistoryTokens`. Because tool results are non-system messages, they can be compressed/dropped by the history manager rather than living forever in the system prompt. Multiple tool calls requested in a single assistant message are executed concurrently, with results pushed in declaration order.
 
 ## Build and Test Commands
 

@@ -33,6 +33,7 @@ retry:
 tools:
   skillsDir: './skills' # Directory containing skills (each skill is a folder with SKILL.md)
   mcpConfigPath: 'mcp.json' # MCP configuration file path
+  maxToolResultTokens: 8000 # Truncate oversized tool results to this many tokens
   mcp:
     connectTimeout: 10.0
     executeTimeout: 60.0

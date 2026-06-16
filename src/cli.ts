@@ -326,7 +326,11 @@ async function runAgent(
     config.agent.maxSteps,
     workspaceDir,
     new TerminalAgentRenderer(),
-    config.llm.retry
+    config.llm.retry,
+    {
+      maxToolResultTokens: config.tools.maxToolResultTokens,
+      maxHistoryTokens: config.history.maxHistoryTokens,
+    }
   );
 
   // Session management
