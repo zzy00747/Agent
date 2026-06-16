@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Logger } from './util/logger.js';
-import { Colors, drawStepHeader } from './util/terminal.js';
+import { NoopRenderer, type AgentRenderer } from './util/agent-renderer.js';
 import { LLMClient } from './llm-client/llm-client.js';
 import type { Message, ToolCall } from './schema/index.js';
 import type { Tool, ToolResult } from './tools/index.js';
@@ -24,17 +24,20 @@ export class Agent {
   public messages: Message[];
   public workspaceDir: string;
   public tools: Map<string, Tool>;
+  private renderer: AgentRenderer;
 
   constructor(
     llmClient: LLMClient,
     systemPrompt: string,
     tools: Tool[],
     maxSteps: number,
-    workspaceDir: string
+    workspaceDir: string,
+    renderer?: AgentRenderer
   ) {
     this.llmClient = llmClient;
     this.maxSteps = maxSteps;
     this.tools = new Map();
+    this.renderer = renderer ?? new NoopRenderer();
 
     // Ensure workspace exists
     this.workspaceDir = path.resolve(workspaceDir);
@@ -96,14 +99,12 @@ export class Agent {
 
   async run(): Promise<string> {
     for (let step = 0; step < this.maxSteps; step++) {
-      // Step Header
-      console.log();
-      console.log(drawStepHeader(step + 1, this.maxSteps));
+      this.renderer.onStepStart(step + 1, this.maxSteps);
 
       let fullContent = '';
       let fullThinking = '';
       let toolCalls: ToolCall[] | null = null;
-      let isThinkingPrinted = false;
+      let hasThinking = false;
 
       const toolList = this.listTools();
       for await (const chunk of this.llmClient.generateStream(
@@ -111,46 +112,22 @@ export class Agent {
         toolList
       )) {
         if (chunk.thinking) {
-          if (!isThinkingPrinted) {
-            console.log();
-            console.log(`${Colors.DIM}─${'─'.repeat(60)}${Colors.RESET}`);
-            console.log();
-            console.log(
-              `${Colors.BOLD}${Colors.BRIGHT_MAGENTA}🧠 Thinking:${Colors.RESET}`
-            );
-            isThinkingPrinted = true;
-          }
-          process.stdout.write(chunk.thinking);
+          this.renderer.onThinkingChunk(chunk.thinking);
           fullThinking += chunk.thinking;
+          hasThinking = true;
         }
 
         if (chunk.content) {
-          if (isThinkingPrinted && fullContent === '') {
-            console.log();
-            console.log();
-            console.log(`${Colors.DIM}─${'─'.repeat(60)}${Colors.RESET}`);
-            console.log();
-            console.log(
-              `${Colors.BOLD}${Colors.BRIGHT_BLUE}📝 Response:${Colors.RESET}`
-            );
-          } else if (!isThinkingPrinted && fullContent === '') {
-            // 只有 Response，无 Thinking：1 个空行 + Response 标题
-            console.log();
-            console.log(
-              `${Colors.BOLD}${Colors.BRIGHT_BLUE}📝 Response:${Colors.RESET}`
-            );
+          if (fullContent === '') {
+            this.renderer.onResponseStart(hasThinking);
           }
-          process.stdout.write(chunk.content);
+          this.renderer.onResponseChunk(chunk.content);
           fullContent += chunk.content;
         }
 
         if (chunk.tool_calls) {
           toolCalls = chunk.tool_calls;
         }
-      }
-
-      if (!toolCalls || toolCalls.length === 0) {
-        console.log();
       }
 
       this.messages.push({
@@ -160,7 +137,11 @@ export class Agent {
         tool_calls: toolCalls || undefined,
       });
 
+      const hasToolCalls = !!(toolCalls && toolCalls.length > 0);
+      this.renderer.onStepEnd(hasToolCalls);
+
       if (!toolCalls || toolCalls.length === 0) {
+        this.renderer.onComplete(fullContent);
         return fullContent;
       }
 
@@ -169,46 +150,9 @@ export class Agent {
         const functionName = toolCall.function.name;
         const args = toolCall.function.arguments || {};
 
-        // Tool 标题
-        console.log(
-          `\n${Colors.BOLD}${Colors.BRIGHT_YELLOW}🔧 Tool: ${functionName}${Colors.RESET}`
-        );
-
-        // Arguments
-        console.log(`${Colors.DIM}   Arguments:${Colors.RESET}`);
-        const truncatedArgs: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(args)) {
-          const valueStr = String(value);
-          if (valueStr.length > 200) {
-            truncatedArgs[key] = `${valueStr.slice(0, 200)}...`;
-          } else {
-            truncatedArgs[key] = value;
-          }
-        }
-        const argsJson = JSON.stringify(truncatedArgs, null, 2);
-        for (const line of argsJson.split('\n')) {
-          console.log(`   ${Colors.DIM}${line}${Colors.RESET}`);
-        }
-
+        this.renderer.onToolCall(functionName, args);
         const result = await this.executeTool(functionName, args);
-
-        if (result.success) {
-          let resultText = result.content;
-          const MAX_LENGTH = 300;
-          if (resultText.length > MAX_LENGTH) {
-            resultText = `${resultText.slice(
-              0,
-              MAX_LENGTH
-            )}${Colors.DIM}...${Colors.RESET}`;
-          }
-          console.log(
-            `${Colors.BRIGHT_GREEN}✓${Colors.RESET} ${Colors.BOLD}${Colors.BRIGHT_GREEN}Success:${Colors.RESET} ${resultText}\n`
-          );
-        } else {
-          console.log(
-            `${Colors.BRIGHT_RED}✗${Colors.RESET} ${Colors.BOLD}${Colors.BRIGHT_RED}Error:${Colors.RESET} ${Colors.RED}${result.error ?? 'Unknown error'}${Colors.RESET}\n`
-          );
-        }
+        this.renderer.onToolResult(functionName, result);
 
         this.messages.push({
           role: 'tool',
@@ -221,6 +165,8 @@ export class Agent {
       }
     }
 
-    return `Task couldn't be completed after ${this.maxSteps} steps.`;
+    const message = `Task couldn't be completed after ${this.maxSteps} steps.`;
+    this.renderer.onMaxStepsReached(this.maxSteps);
+    return message;
   }
 }

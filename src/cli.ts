@@ -6,6 +6,7 @@ import { createInterface } from 'node:readline/promises';
 import { Config } from './config.js';
 import { LLMClient } from './llm-client/llm-client.js';
 import { Logger } from './util/logger.js';
+import { TerminalAgentRenderer } from './util/agent-renderer.js';
 import { Agent } from './agent.js';
 import {
   BashKillTool,
@@ -286,7 +287,8 @@ async function runAgent(workspaceDir: string): Promise<void> {
     systemPrompt,
     tools,
     config.agent.maxSteps,
-    workspaceDir
+    workspaceDir,
+    new TerminalAgentRenderer()
   );
 
   const rl = createInterface({
