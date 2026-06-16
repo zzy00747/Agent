@@ -103,7 +103,7 @@ mini-agent-ts/
    - `./config/config.yaml` (current working directory)
    - `~/.mini-agent-ts/config/config.yaml`
    - `{package_root}/config/config.yaml`
-4. `Config.fromYaml()` validates the YAML with Zod and returns a strongly typed config.
+4. `Config.load()` loads the YAML config and merges `MINI_AGENT_*` environment variables on top. Env vars take precedence over YAML, and nested keys use double underscores (e.g. `MINI_AGENT_RETRY__ENABLED`). `Config.fromYaml()` is still available for direct YAML loading without env merging.
 5. An `LLMClient` is created based on `provider` (`openai` or `anthropic`).
 6. Built-in tools are instantiated: `ReadTool`, `WriteTool`, `EditTool`, `BashTool`, `BashOutputTool`, `BashKillTool`.
 7. Optional skills are loaded from `tools.skillsDir` (`./skills` by default).

@@ -174,14 +174,25 @@ async function runAgent(
   workspaceDir: string,
   resumeSessionId: string | undefined
 ): Promise<void> {
-  // Load Workspace dir
+  // Load configuration (env vars override YAML file)
   const configPath = Config.findConfigFile('config.yaml');
-  if (!configPath) {
-    console.error('❌ Configuration file not found. Please run setup.');
+  let config: Config;
+  try {
+    config = Config.load(configPath ?? undefined);
+  } catch (error) {
+    console.error(
+      `❌ Failed to load configuration: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    console.error('   Set MINI_AGENT_API_KEY or create config/config.yaml.');
     process.exit(1);
   }
-  const config = Config.fromYaml(configPath);
-  console.log(`Config loaded from: ${configPath}`);
+  if (configPath) {
+    console.log(`Config loaded from: ${configPath}`);
+  } else {
+    console.log('Config loaded from environment variables');
+  }
   console.log(`Workspace: ${workspaceDir}`);
 
   if (config.logging.enableLogging) {

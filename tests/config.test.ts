@@ -6,6 +6,7 @@ import { Config } from '../src/config.js';
 
 describe('Config', () => {
   let tempDir: string;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
@@ -13,6 +14,17 @@ describe('Config', () => {
 
   afterEach(() => {
     fs.rmSync(tempDir, { recursive: true, force: true });
+    // Restore environment variables.
+    for (const key of Object.keys(process.env)) {
+      if (key.startsWith('MINI_AGENT_')) {
+        delete process.env[key];
+      }
+    }
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value !== undefined) {
+        process.env[key] = value;
+      }
+    }
   });
 
   it('uses defaults for optional fields', () => {
@@ -91,5 +103,62 @@ describe('Config', () => {
     fs.writeFileSync(configPath, '   \n', 'utf8');
 
     expect(() => Config.fromYaml(configPath)).toThrow('empty');
+  });
+
+  it('loads config from environment variables only', () => {
+    process.env['MINI_AGENT_API_KEY'] = 'env-key';
+    process.env['MINI_AGENT_MODEL'] = 'env-model';
+    process.env['MINI_AGENT_PROVIDER'] = 'openai';
+
+    const config = Config.load();
+
+    expect(config.llm.apiKey).toBe('env-key');
+    expect(config.llm.model).toBe('env-model');
+    expect(config.llm.provider).toBe('openai');
+  });
+
+  it('environment variables override YAML config', () => {
+    const configPath = path.join(tempDir, 'config.yaml');
+    fs.writeFileSync(
+      configPath,
+      [
+        "apiKey: 'yaml-key'",
+        "model: 'yaml-model'",
+        "provider: 'anthropic'",
+      ].join('\n'),
+      'utf8'
+    );
+
+    process.env['MINI_AGENT_MODEL'] = 'env-model';
+
+    const config = Config.load(configPath);
+
+    expect(config.llm.apiKey).toBe('yaml-key');
+    expect(config.llm.model).toBe('env-model');
+    expect(config.llm.provider).toBe('anthropic');
+  });
+
+  it('supports nested environment variables with double underscore', () => {
+    process.env['MINI_AGENT_API_KEY'] = 'env-key';
+    process.env['MINI_AGENT_RETRY__ENABLED'] = 'false';
+    process.env['MINI_AGENT_RETRY__MAX_RETRIES'] = '1';
+    process.env['MINI_AGENT_HISTORY__MAX_HISTORY_TOKENS'] = '4000';
+
+    const config = Config.load();
+
+    expect(config.llm.retry.enabled).toBe(false);
+    expect(config.llm.retry.maxRetries).toBe(1);
+    expect(config.history.maxHistoryTokens).toBe(4000);
+  });
+
+  it('converts boolean and numeric env values', () => {
+    process.env['MINI_AGENT_API_KEY'] = 'env-key';
+    process.env['MINI_AGENT_ENABLE_LOGGING'] = 'true';
+    process.env['MINI_AGENT_MAX_STEPS'] = '42';
+
+    const config = Config.load();
+
+    expect(config.logging.enableLogging).toBe(true);
+    expect(config.agent.maxSteps).toBe(42);
   });
 });

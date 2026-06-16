@@ -96,13 +96,39 @@ When the token budget is exceeded, older messages are summarized to stay within 
 
 ### Environment Variables
 
-| Variable        | Description                       | Default  |
-| --------------- | --------------------------------- | -------- |
-| `apiKey`        | Your LLM provider API key         | Required |
-| `apiBase`       | API endpoint URL                  | Required |
-| `model`         | Model name                        | Required |
-| `provider`      | SDK type: `openai` or `anthropic` | `openai` |
-| `enableLogging` | Enable runtime logging            | `false`  |
+All YAML config options can be overridden via environment variables. Env vars take precedence over `config.yaml`.
+
+Prefix with `MINI_AGENT_` and use double underscores for nested keys:
+
+```bash
+export MINI_AGENT_API_KEY=sk-your-key
+export MINI_AGENT_MODEL=MiniMax-M2.5
+export MINI_AGENT_PROVIDER=openai
+export MINI_AGENT_RETRY__ENABLED=false
+export MINI_AGENT_HISTORY__MAX_HISTORY_TOKENS=8000
+```
+
+Common variables:
+
+| Variable                          | Description                       | Default  |
+| --------------------------------- | --------------------------------- | -------- |
+| `MINI_AGENT_API_KEY`              | Your LLM provider API key         | Required |
+| `MINI_AGENT_API_BASE`             | API endpoint URL                  | Required |
+| `MINI_AGENT_MODEL`                | Model name                        | Required |
+| `MINI_AGENT_PROVIDER`             | SDK type: `openai` or `anthropic` | `openai` |
+| `MINI_AGENT_ENABLE_LOGGING`       | Enable runtime logging            | `false`  |
+| `MINI_AGENT_MAX_STEPS`            | Maximum execution steps           | `50`     |
+| `MINI_AGENT_RETRY__ENABLED`       | Enable retry mechanism            | `true`   |
+| `MINI_AGENT_RETRY__MAX_RETRIES`   | Maximum number of retries         | `3`      |
+| `MINI_AGENT_HISTORY__AUTO_SAVE`   | Auto-save conversation history    | `true`   |
+| `MINI_AGENT_HISTORY__MAX_HISTORY_TOKENS` | History token budget         | `0`      |
+
+Configuration loading priority (highest to lowest):
+
+1. Environment variables (`MINI_AGENT_*`)
+2. `~/.mini-agent-ts/config/config.yaml`
+3. `./config/config.yaml`
+4. Built-in defaults
 
 ### Tool Security
 

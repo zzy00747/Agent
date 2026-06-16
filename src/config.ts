@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import * as yaml from 'yaml';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { mergeWithEnv } from './util/env-config.js';
 
 // ============ Defaults ============
 
@@ -188,6 +189,39 @@ export class Config {
 
     const rawData = yaml.parse(content);
     const parsedData = ConfigSchema.parse(rawData);
+
+    return new Config(parsedData);
+  }
+
+  /**
+   * Load configuration with environment variable overrides.
+   *
+   * Priority (highest to lowest):
+   * 1. Environment variables (MINI_AGENT_*)
+   * 2. YAML config file (explicit path, then ~/.mini-agent-ts/config/config.yaml,
+   *    then ./config/config.yaml, then package default)
+   * 3. Built-in defaults
+   *
+   * @param configPath - Optional explicit config file path
+   * @returns A validated Config instance
+   * @throws Error if no valid API key is available
+   */
+  static load(configPath?: string): Config {
+    const filePath = configPath ?? Config.findConfigFile('config.yaml');
+
+    let rawData: unknown = {};
+    if (filePath && fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf8');
+      if (content && content.trim()) {
+        rawData = yaml.parse(content);
+      }
+    }
+
+    const merged = mergeWithEnv(
+      rawData as Record<string, unknown>,
+      process.env
+    );
+    const parsedData = ConfigSchema.parse(merged);
 
     return new Config(parsedData);
   }

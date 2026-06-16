@@ -1,4 +1,11 @@
 # Mini Agent TS Configuration Example
+#
+# NOTE: Every option here can also be set via environment variables.
+# Env vars take precedence over this file. Prefix with MINI_AGENT_ and use
+# double underscores for nested keys:
+#   MINI_AGENT_API_KEY=sk-xxx
+#   MINI_AGENT_MODEL=MiniMax-M2.5
+#   MINI_AGENT_RETRY__ENABLED=false
 
 # ===== LLM Configuration =====
 # MiniMax API Configuration
