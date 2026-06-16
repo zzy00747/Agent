@@ -1,12 +1,17 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { glob } from 'fast-glob';
 import type { Tool, ToolResult } from './base.js';
 
 type ReadFileInput = {
-  path: string;
+  path?: string;
+  glob?: string;
   offset?: number;
   limit?: number;
+  autoChunk?: boolean;
 };
+
+const DEFAULT_MAX_READ_TOKENS = 8000;
 
 type WriteFileInput = {
   path: string;
@@ -67,13 +72,20 @@ export class ReadTool implements Tool<ReadFileInput> {
     'Read file contents from the filesystem. Output always includes line numbers ' +
     "in format 'LINE_NUMBER|LINE_CONTENT' (1-indexed). Supports reading partial content " +
     'by specifying line offset and limit for large files. ' +
-    'You can call this tool multiple times in parallel to read different files simultaneously.';
+    'Supports glob patterns to read multiple files at once. ' +
+    'Large files are automatically chunked when no limit is specified.';
   public parameters = {
     type: 'object',
     properties: {
       path: {
         type: 'string',
-        description: 'Absolute or relative path to the file',
+        description:
+          'Absolute or relative path to the file (alternative to glob)',
+      },
+      glob: {
+        type: 'string',
+        description:
+          'Glob pattern to read multiple files at once, e.g. "src/**/*.ts". Relative to workspace.',
       },
       offset: {
         type: 'integer',
@@ -85,8 +97,14 @@ export class ReadTool implements Tool<ReadFileInput> {
         description:
           'Number of lines to read. Use with offset for large files to read in chunks',
       },
+      autoChunk: {
+        type: 'boolean',
+        description:
+          'When true and no limit is set, large files are automatically truncated to ~8000 tokens. Default: true.',
+        default: true,
+      },
     },
-    required: ['path'],
+    anyOf: [{ required: ['path'] }, { required: ['glob'] }],
   };
 
   constructor(private workspaceDir: string = '.') {}
@@ -95,42 +113,39 @@ export class ReadTool implements Tool<ReadFileInput> {
    * Read file content with optional line slicing and numbering.
    */
   async execute(params: ReadFileInput): Promise<ToolResult> {
-    const targetPath = resolvePath(this.workspaceDir, params.path);
+    if (params.glob) {
+      return this.readGlob(params.glob, params);
+    }
+
+    if (!params.path) {
+      return {
+        success: false,
+        content: '',
+        error: 'Either path or glob must be provided.',
+      };
+    }
+
+    return this.readSingle(params.path, params);
+  }
+
+  private async readSingle(
+    targetPath: string,
+    params: ReadFileInput
+  ): Promise<ToolResult> {
+    const resolvedPath = resolvePath(this.workspaceDir, targetPath);
     try {
-      await fs.access(targetPath);
+      await fs.access(resolvedPath);
     } catch {
       return {
         success: false,
         content: '',
-        error: `File not found: ${params.path}`,
+        error: `File not found: ${targetPath}`,
       };
     }
 
     try {
-      const raw = await fs.readFile(targetPath, 'utf8');
-      const lines = raw.split('\n');
-
-      const offset =
-        typeof params.offset === 'number' && Number.isFinite(params.offset)
-          ? Math.floor(params.offset)
-          : undefined;
-      const limit =
-        typeof params.limit === 'number' && Number.isFinite(params.limit)
-          ? Math.floor(params.limit)
-          : undefined;
-
-      let start = offset ? offset - 1 : 0;
-      let end = limit ? start + limit : lines.length;
-      if (start < 0) start = 0;
-      if (end > lines.length) end = lines.length;
-
-      const selected = lines.slice(start, end);
-      const numberedLines = selected.map((line, index) => {
-        const lineNumber = String(start + index + 1).padStart(6, ' ');
-        return `${lineNumber}|${line}`;
-      });
-
-      const content = truncateTextByTokens(numberedLines.join('\n'), 32000);
+      const raw = await fs.readFile(resolvedPath, 'utf8');
+      const content = this.processContent(raw, params);
       return { success: true, content };
     } catch (error) {
       return {
@@ -139,6 +154,73 @@ export class ReadTool implements Tool<ReadFileInput> {
         error: (error as Error).message || String(error),
       };
     }
+  }
+
+  private async readGlob(
+    pattern: string,
+    params: ReadFileInput
+  ): Promise<ToolResult> {
+    const cwd = this.workspaceDir;
+    const matches = await glob(pattern, { cwd, onlyFiles: true });
+
+    if (matches.length === 0) {
+      return {
+        success: false,
+        content: '',
+        error: `No files matched glob pattern: ${pattern}`,
+      };
+    }
+
+    const parts: string[] = [];
+    for (const relativePath of matches) {
+      const resolved = resolvePath(cwd, relativePath);
+      try {
+        const raw = await fs.readFile(resolved, 'utf8');
+        const content = this.processContent(raw, {
+          ...params,
+          path: relativePath,
+        });
+        parts.push(`=== file: ${relativePath} ===\n${content}`);
+      } catch (error) {
+        parts.push(
+          `=== file: ${relativePath} ===\n[Error: ${
+            (error as Error).message || String(error)
+          }]`
+        );
+      }
+    }
+
+    return { success: true, content: parts.join('\n\n') };
+  }
+
+  private processContent(raw: string, params: ReadFileInput): string {
+    const lines = raw.split('\n');
+
+    const offset =
+      typeof params.offset === 'number' && Number.isFinite(params.offset)
+        ? Math.floor(params.offset)
+        : undefined;
+    const limit =
+      typeof params.limit === 'number' && Number.isFinite(params.limit)
+        ? Math.floor(params.limit)
+        : undefined;
+
+    let start = offset ? offset - 1 : 0;
+    let end = limit ? start + limit : lines.length;
+    if (start < 0) start = 0;
+    if (end > lines.length) end = lines.length;
+
+    const selected = lines.slice(start, end);
+    const numberedLines = selected.map((line, index) => {
+      const lineNumber = String(start + index + 1).padStart(6, ' ');
+      return `${lineNumber}|${line}`;
+    });
+
+    const enableAutoChunk = params.autoChunk !== false;
+    const maxTokens =
+      enableAutoChunk && limit === undefined ? DEFAULT_MAX_READ_TOKENS : 32000;
+
+    return truncateTextByTokens(numberedLines.join('\n'), maxTokens);
   }
 }
 

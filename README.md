@@ -104,6 +104,29 @@ When the token budget is exceeded, older messages are summarized to stay within 
 | `provider`      | SDK type: `openai` or `anthropic` | `openai` |
 | `enableLogging` | Enable runtime logging            | `false`  |
 
+### Tool Security
+
+Bash commands run inside the workspace directory by default. Destructive or system-wide commands (e.g. `rm -rf /`, `format C:`, `dd` to devices) are blocked. Sensitive commands like `rm`, `del`, `format`, `mkfs`, and `dd` are also blocked unless explicitly allowed:
+
+```yaml
+tools:
+  security:
+    bash:
+      blockedPatterns: [] # Additional regex patterns to block
+      allowedPatterns: [] # Patterns that bypass the blocklist
+      allowDangerousCommands: false # Set true to allow sensitive commands
+```
+
+### Batch File Reading
+
+`read_file` supports glob patterns for reading multiple files at once:
+
+```text
+read_file(glob="src/**/*.ts")
+```
+
+Large files are automatically chunked to ~8000 tokens when no `limit` is specified.
+
 ### MCP Servers
 
 Add external tools via MCP protocol:

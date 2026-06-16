@@ -57,10 +57,31 @@ const MCPSchema = z.object({
   sseReadTimeout: z.number().default(DEFAULTS.MCP.sseReadTimeout),
 });
 
+const BashSecuritySchema = z.object({
+  blockedPatterns: z.array(z.string()).default([]),
+  allowedPatterns: z.array(z.string()).default([]),
+  allowDangerousCommands: z.boolean().default(false),
+});
+
+const ToolsSecuritySchema = z.object({
+  bash: BashSecuritySchema.default({
+    blockedPatterns: [],
+    allowedPatterns: [],
+    allowDangerousCommands: false,
+  }),
+});
+
 const ToolsSchema = z.object({
   skillsDir: z.string().default(DEFAULTS.TOOLS.skillsDir),
   mcpConfigPath: z.string().default(DEFAULTS.TOOLS.mcpConfigPath),
   mcp: MCPSchema,
+  security: ToolsSecuritySchema.default({
+    bash: {
+      blockedPatterns: [],
+      allowedPatterns: [],
+      allowDangerousCommands: false,
+    },
+  }),
 });
 
 const HistorySchema = z.object({
@@ -108,6 +129,8 @@ const ConfigSchema = z
 
 export type RetryConfig = z.infer<typeof RetrySchema>;
 export type LoggingConfig = z.infer<typeof ConfigSchema>['logging'];
+export type BashSecurityConfig = z.infer<typeof BashSecuritySchema>;
+export type ToolsSecurityConfig = z.infer<typeof ToolsSecuritySchema>;
 export type ToolsConfig = z.infer<typeof ToolsSchema>;
 export type HistoryConfig = z.infer<typeof HistorySchema>;
 export type LLMConfig = z.infer<typeof ConfigSchema>['llm'];

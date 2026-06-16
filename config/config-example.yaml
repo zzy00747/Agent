@@ -30,6 +30,11 @@ tools:
     connectTimeout: 10.0
     executeTimeout: 60.0
     sseReadTimeout: 120.0
+  security:
+    bash:
+      blockedPatterns: [] # Additional regex patterns to block
+      allowedPatterns: [] # Regex patterns that bypass the blocklist
+      allowDangerousCommands: false # Set true to allow rm/del/format/mkfs/dd
 
 # ===== Session History Configuration =====
 history:

@@ -229,7 +229,7 @@ async function runAgent(
   tools.push(new ReadTool(workspaceDir));
   tools.push(new WriteTool(workspaceDir));
   tools.push(new EditTool(workspaceDir));
-  tools.push(new BashTool());
+  tools.push(new BashTool(workspaceDir, config.tools.security.bash));
   tools.push(new BashOutputTool());
   tools.push(new BashKillTool());
 

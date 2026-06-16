@@ -1,6 +1,7 @@
 import { exec, spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { Tool, ToolResultWithMeta } from './base.js';
+import { BashGuard, type BashSecurityConfig } from './security/bash-guard.js';
 
 type BashInput = {
   command: string;
@@ -248,8 +249,12 @@ function buildResult(
 export class BashTool implements Tool<BashInput, BashOutputResult> {
   public name = 'bash';
   public description =
-    'Execute bash commands in foreground or background.\n\n' +
+    'Execute bash commands in the workspace directory. Foreground or background modes are supported.\n\n' +
     'For terminal operations like git, npm, docker, etc. DO NOT use for file operations - use specialized tools.\n\n' +
+    'Security notes:\n' +
+    '  - Commands run inside the configured workspace directory by default.\n' +
+    '  - Destructive/system-wide commands (e.g. rm -rf /, format, mkfs, dd to devices) are blocked.\n' +
+    '  - Sensitive commands like rm, del, format require explicit allowlisting or allowDangerousCommands in config.\n\n' +
     'Parameters:\n' +
     '  - command (required): Bash command to execute\n' +
     '  - timeout (optional): Timeout in seconds (default: 120, max: 600) for foreground commands\n' +
@@ -257,7 +262,6 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
     'Tips:\n' +
     '  - Quote file paths with spaces: cd "My Documents"\n' +
     '  - Chain dependent commands with &&: git add . && git commit -m "msg"\n' +
-    '  - Use absolute paths instead of cd when possible\n' +
     '  - For background commands, monitor with bash_output and terminate with bash_kill\n\n' +
     'Examples:\n' +
     '  - git status\n' +
@@ -288,17 +292,40 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
     required: ['command'],
   };
 
+  private guard: BashGuard;
+
+  constructor(
+    private workspaceDir: string = '.',
+    securityConfig?: BashSecurityConfig
+  ) {
+    this.guard = new BashGuard(securityConfig);
+  }
+
   /**
    * Execute a shell command in foreground or background.
    */
   async execute(params: BashInput): Promise<BashOutputResult> {
+    const validation = this.guard.validate(params.command);
+    if (!validation.allowed) {
+      return buildResult({
+        success: false,
+        stdout: '',
+        stderr: validation.reason ?? 'Command blocked by security policy.',
+        exit_code: -1,
+        bash_id: null,
+      });
+    }
+
     const timeout = Math.min(Math.max(params.timeout ?? 120, 1), 600);
     const runInBackground = params.run_in_background ?? false;
     const { shell, args } = buildShellCommand(params.command);
 
     if (runInBackground) {
       const bashId = Math.random().toString(16).slice(2, 10);
-      const process = spawn(shell, args, { stdio: 'pipe' });
+      const process = spawn(shell, args, {
+        stdio: 'pipe',
+        cwd: this.workspaceDir,
+      });
       const bgShell = new BackgroundShell(
         bashId,
         params.command,
@@ -340,6 +367,7 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
           timeout: timeout * 1000,
           maxBuffer: 10 * 1024 * 1024,
           shell,
+          cwd: this.workspaceDir,
         },
         (error, stdout, stderr) => {
           if (error) {

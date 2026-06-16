@@ -38,6 +38,7 @@
     "@anthropic-ai/sdk": "^0.71.2",
     "@modelcontextprotocol/sdk": "^1.1.0",
     "commander": "^14.0.2",
+    "fast-glob": "^3.3.3",
     "openai": "^6.10.0",
     "yaml": "^2.8.2",
     "zod": "^4.3.5"
