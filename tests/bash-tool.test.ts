@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
   BashTool,
   BashOutputTool,
@@ -112,5 +115,68 @@ describeIf("Bash tool", () => {
 
     expect(outputResult.success).toBe(false);
     expect(outputResult.error?.toLowerCase()).toContain("not found");
+  });
+
+  it("should run commands in the configured workspace directory", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "bash-workspace-"));
+    const tool = new BashTool(tempDir);
+
+    const result = await tool.execute({ command: "pwd" });
+
+    expect(result.success).toBe(true);
+    expect(result.stdout.trim()).toBe(tempDir);
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("should block dangerous commands", async () => {
+    const tool = new BashTool("/tmp");
+
+    const blocked = [
+      "rm -rf /",
+      "rm -rf /*",
+      "format C:",
+      "dd if=/dev/zero of=/dev/sda",
+      "mkfs.ext4 /dev/sda1",
+    ];
+
+    for (const command of blocked) {
+      const result = await tool.execute({ command });
+      expect(result.success).toBe(false);
+      expect(result.error?.toLowerCase()).toContain("blocked");
+    }
+  });
+
+  it("should flag sensitive commands by default", async () => {
+    const tool = new BashTool("/tmp");
+    const result = await tool.execute({ command: "rm file.txt" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.toLowerCase()).toContain("sensitive");
+  });
+
+  it("should allow commands matching allowedPatterns", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "bash-allow-"));
+    fs.writeFileSync(path.join(tempDir, "file.txt"), "hello", "utf8");
+
+    const tool = new BashTool(tempDir, {
+      allowedPatterns: ["rm file\\.txt"],
+    });
+    const result = await tool.execute({ command: "rm file.txt" });
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(tempDir, "file.txt"))).toBe(false);
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("should block commands matching custom blockedPatterns", async () => {
+    const tool = new BashTool("/tmp", {
+      blockedPatterns: ["evil-command"],
+    });
+
+    const result = await tool.execute({ command: "evil-command" });
+    expect(result.success).toBe(false);
+    expect(result.error?.toLowerCase()).toContain("blocked");
   });
 });

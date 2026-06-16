@@ -37,6 +37,18 @@ const DEFAULTS = {
   TOOLS: {
     skillsDir: './skills',
     mcpConfigPath: 'mcp.json',
+    mcp: {
+      connectTimeout: 10.0,
+      executeTimeout: 60.0,
+      sseReadTimeout: 120.0,
+    },
+    security: {
+      bash: {
+        blockedPatterns: [],
+        allowedPatterns: [],
+        allowDangerousCommands: false,
+      },
+    },
   },
   HISTORY: {
     autoSave: true,
@@ -74,7 +86,7 @@ const ToolsSecuritySchema = z.object({
 const ToolsSchema = z.object({
   skillsDir: z.string().default(DEFAULTS.TOOLS.skillsDir),
   mcpConfigPath: z.string().default(DEFAULTS.TOOLS.mcpConfigPath),
-  mcp: MCPSchema,
+  mcp: MCPSchema.default(DEFAULTS.MCP),
   security: ToolsSecuritySchema.default({
     bash: {
       blockedPatterns: [],
@@ -98,12 +110,12 @@ const ConfigSchema = z
 
     enableLogging: z.boolean().default(DEFAULTS.LOGGING.enableLogging),
 
-    retry: RetrySchema,
+    retry: RetrySchema.default(DEFAULTS.RETRY),
 
     maxSteps: z.number().default(DEFAULTS.AGENT.maxSteps),
     systemPromptPath: z.string().default(DEFAULTS.AGENT.systemPromptPath),
 
-    tools: ToolsSchema,
+    tools: ToolsSchema.default(DEFAULTS.TOOLS),
     history: HistorySchema.default(DEFAULTS.HISTORY),
   })
   .transform((data) => ({

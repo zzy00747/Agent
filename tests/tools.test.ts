@@ -75,4 +75,39 @@ describe("File tools", () => {
 
     await fs.rm(tempDir, { recursive: true, force: true });
   });
+
+  it("should read multiple files via glob", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "mini-agent-"));
+    await fs.writeFile(path.join(tempDir, "a.txt"), "aaa", "utf8");
+    await fs.writeFile(path.join(tempDir, "b.txt"), "bbb", "utf8");
+
+    const tool = new ReadTool(tempDir);
+    const result = await tool.execute({ glob: "*.txt" });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("=== file: a.txt ===");
+    expect(result.content).toContain("=== file: b.txt ===");
+    expect(result.content).toContain("aaa");
+    expect(result.content).toContain("bbb");
+
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("should auto-chunk large files", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "mini-agent-"));
+    const filePath = path.join(tempDir, "big.txt");
+    // ~4000 tokens of content (well above 8000-token threshold would need more,
+    // so we create enough to trigger head/tail truncation).
+    const longLine = "x".repeat(100);
+    const lines = Array.from({ length: 400 }, () => longLine);
+    await fs.writeFile(filePath, lines.join("\n"), "utf8");
+
+    const tool = new ReadTool(tempDir);
+    const result = await tool.execute({ path: "big.txt" });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain("[Content truncated");
+
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
 });
