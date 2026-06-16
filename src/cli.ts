@@ -7,6 +7,13 @@ import { Config } from './config.js';
 import { LLMClient } from './llm-client/llm-client.js';
 import { Logger } from './util/logger.js';
 import { TerminalAgentRenderer } from './util/agent-renderer.js';
+import {
+  generateSessionId,
+  loadSession,
+  saveSession,
+  type SessionData,
+} from './util/session-store.js';
+import { compressMessages, estimateTokens } from './util/history-compressor.js';
 import { Agent } from './agent.js';
 import {
   BashKillTool,
@@ -107,7 +114,10 @@ function printBanner(): void {
   console.log();
 }
 
-function parseArgs(): { workspace: string | undefined } {
+function parseArgs(): {
+  workspace: string | undefined;
+  resume: string | undefined;
+} {
   const program = new Command();
 
   program
@@ -119,6 +129,7 @@ function parseArgs(): { workspace: string | undefined } {
 Examples:
   mini-agent-ts                              # Use current directory as workspace
   mini-agent-ts --workspace /path/to/dir     # Use specific workspace directory
+  mini-agent-ts --resume <session-id>        # Resume a previous session
       `
     );
 
@@ -126,12 +137,17 @@ Examples:
     '-w, --workspace <dir>',
     'Workspace directory (default: current directory)'
   );
+  program.option(
+    '-r, --resume <session-id>',
+    'Resume a previous conversation session'
+  );
 
   program.parse(process.argv);
   const options = program.opts();
 
   return {
     workspace: options['workspace'] as string | undefined,
+    resume: options['resume'] as string | undefined,
   };
 }
 
@@ -154,7 +170,10 @@ function resolveWorkspace(args: { workspace: string | undefined }): string {
 
 // ============ Main Startup Logic ============
 
-async function runAgent(workspaceDir: string): Promise<void> {
+async function runAgent(
+  workspaceDir: string,
+  resumeSessionId: string | undefined
+): Promise<void> {
   // Load Workspace dir
   const configPath = Config.findConfigFile('config.yaml');
   if (!configPath) {
@@ -291,6 +310,41 @@ async function runAgent(workspaceDir: string): Promise<void> {
     new TerminalAgentRenderer()
   );
 
+  // Session management
+  const sessionId = resumeSessionId ?? generateSessionId();
+  let sessionData: SessionData | null = null;
+
+  if (resumeSessionId) {
+    sessionData = loadSession(resumeSessionId);
+    if (sessionData) {
+      agent.setMessages(sessionData.messages);
+      console.log(`🔄 Resumed session: ${resumeSessionId}`);
+      console.log(`   Messages: ${sessionData.messages.length}`);
+    } else {
+      console.log(
+        `⚠️  Session not found: ${resumeSessionId}. Starting a new session.`
+      );
+    }
+  }
+
+  console.log(`💾 Session ID: ${sessionId}`);
+
+  const saveCurrentSession = (): void => {
+    if (!config.history.autoSave) return;
+
+    let messages = agent.getMessages();
+    if (config.history.maxHistoryTokens > 0) {
+      const currentTokens = estimateTokens(messages);
+      if (currentTokens > config.history.maxHistoryTokens) {
+        messages = compressMessages(messages, config.history.maxHistoryTokens);
+        agent.setMessages(messages);
+      }
+    }
+
+    const filePath = saveSession(sessionId, messages, sessionData ?? undefined);
+    Logger.log('session', 'Saved session to:', filePath);
+  };
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -324,6 +378,7 @@ async function runAgent(workspaceDir: string): Promise<void> {
 
       try {
         await agent.run();
+        saveCurrentSession();
       } catch (error) {
         if (error instanceof Error) {
           console.log(`\n❌ Error: ${error.message}`);
@@ -344,6 +399,7 @@ async function runAgent(workspaceDir: string): Promise<void> {
     // Graceful Shutdown
     process.removeListener('SIGINT', onSigint);
     rl.close();
+    saveCurrentSession();
     await cleanupMcpConnections();
   }
 }
@@ -359,5 +415,5 @@ export async function run(): Promise<void> {
     process.exit(1);
   }
 
-  await runAgent(workspaceDir);
+  await runAgent(workspaceDir, args.resume);
 }

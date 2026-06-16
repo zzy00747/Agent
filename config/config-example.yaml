@@ -30,3 +30,8 @@ tools:
     connectTimeout: 10.0
     executeTimeout: 60.0
     sseReadTimeout: 120.0
+
+# ===== Session History Configuration =====
+history:
+  autoSave: true # Automatically save conversation history after each turn
+  maxHistoryTokens: 0 # Token budget for history (0 = unlimited); old messages are summarized when exceeded

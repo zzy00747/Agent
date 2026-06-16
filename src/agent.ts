@@ -58,6 +58,14 @@ export class Agent {
     this.messages.push({ role: 'user', content });
   }
 
+  getMessages(): Message[] {
+    return this.messages;
+  }
+
+  setMessages(messages: Message[]): void {
+    this.messages = messages;
+  }
+
   registerTool(tool: Tool): void {
     this.tools.set(tool.name, tool);
   }

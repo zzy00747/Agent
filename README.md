@@ -70,6 +70,26 @@ mini-agent-ts
 
 That's it! You have a working AI Agent in your terminal.
 
+### 💾 Session Persistence
+
+Conversation history is automatically saved to `~/.mini-agent-ts/history/{session-id}.json`. The session ID is printed when you start the agent.
+
+To resume a previous session:
+
+```bash
+mini-agent-ts --resume <session-id>
+```
+
+You can also limit the history context length in `config/config.yaml`:
+
+```yaml
+history:
+  autoSave: true
+  maxHistoryTokens: 8000 # 0 = unlimited
+```
+
+When the token budget is exceeded, older messages are summarized to stay within the limit.
+
 ---
 
 ## 🔧 Configuration

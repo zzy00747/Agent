@@ -193,6 +193,7 @@ Do NOT push to remote unless explicitly asked by the user.
 
 - The `Agent` class in `src/agent.ts` is intentionally small. Most orchestration (config loading, tool wiring, I/O) lives in `src/cli.ts`.
 - `Agent` accepts an optional `AgentRenderer` (`src/util/agent-renderer.ts`). The core agent emits events (step start, thinking/response chunks, tool calls/results); the renderer handles presentation. `TerminalAgentRenderer` provides the default CLI output, and `NoopRenderer` can be used for tests or silent execution.
+- Conversation history is persisted under `~/.mini-agent-ts/history/{session-id}.json`. Start with `--resume <session-id>` to restore a previous session. Use `history.maxHistoryTokens` in `config.yaml` to limit context length; older messages are summarized when the budget is exceeded.
 - When adding a new built-in tool, implement the `Tool` interface in `src/tools/`, re-export it from `src/tools/index.ts`, and instantiate it in `src/cli.ts`.
 - When adding a new LLM provider, extend `LLMClientBase` in `src/llm-client/` and add the provider enum/case in `src/llm-client/llm-client.ts` and `src/schema/schema.ts`.
 - Skills are loaded recursively from `SKILL.md` files. The `SkillLoader` parses YAML frontmatter and validates it against `SkillSchema` in `src/skills/types.ts`.
