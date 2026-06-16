@@ -167,9 +167,10 @@ MCP servers are configured in `config/mcp.json` (copy from `config/mcp-example.j
 
 After every code modification, the agent should:
 
-1. Run tests with `npm run test:run`.
-2. If tests pass, stage the changed files with `git add`.
-3. Create a local `git commit` using Conventional Commits format (e.g., `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`).
+1. Check whether related documentation or configuration files (e.g., `README.md`, `AGENTS.md`, `package.json`, `config/config-example.yaml`) need to be updated for consistency. If so, update them first.
+2. Run tests with `npm run test:run`.
+3. If tests pass, stage the changed files with `git add`.
+4. Create a local `git commit` using Conventional Commits format (e.g., `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`).
 
 Do NOT push to remote unless explicitly asked by the user.
 
