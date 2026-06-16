@@ -122,6 +122,9 @@ Common variables:
 | `MINI_AGENT_RETRY__MAX_RETRIES`   | Maximum number of retries         | `3`      |
 | `MINI_AGENT_HISTORY__AUTO_SAVE`   | Auto-save conversation history    | `true`   |
 | `MINI_AGENT_HISTORY__MAX_HISTORY_TOKENS` | History token budget         | `0`      |
+| `MINI_AGENT_TOOLS__MCP__HEARTBEAT_INTERVAL` | MCP heartbeat interval (seconds) | `30.0` |
+| `MINI_AGENT_TOOLS__MCP__MAX_RECONNECT_ATTEMPTS` | MCP reconnect attempts | `3` |
+| `MINI_AGENT_TOOLS__MCP__RECONNECT_DELAY` | MCP reconnect delay (milliseconds) | `1000` |
 
 Configuration loading priority (highest to lowest):
 
@@ -167,6 +170,40 @@ Configure retry behavior:
 retry:
   enabled: true
   maxRetries: 3
+```
+
+### MCP Connection Management
+
+MCP server connections are actively managed for reliability:
+
+- **Heartbeat keepalive**: The client periodically pings connected MCP servers. If a heartbeat fails, an automatic reconnect is triggered.
+- **Auto-reconnect**: When a tool call fails due to a connection error, or when the server is detected as disconnected, the client attempts to reconnect up to `maxReconnectAttempts` times with `reconnectDelay` between attempts.
+- **Process exit cleanup**: On `exit`, `SIGINT`, or `SIGTERM`, all MCP connections are closed gracefully to avoid orphaned child processes.
+
+Configure connection behavior under `tools.mcp` in `config/config.yaml`:
+
+```yaml
+tools:
+  mcp:
+    connectTimeout: 10.0
+    executeTimeout: 60.0
+    sseReadTimeout: 120.0
+    heartbeatInterval: 30.0 # seconds, 0 to disable
+    maxReconnectAttempts: 3
+    reconnectDelay: 1000 # milliseconds
+```
+
+Or under the top-level `mcp` key in `config/mcp.json`:
+
+```json
+{
+  "mcp": {
+    "heartbeatInterval": 30.0,
+    "maxReconnectAttempts": 3,
+    "reconnectDelay": 1000
+  },
+  "mcpServers": { ... }
+}
 ```
 
 ### MCP Servers

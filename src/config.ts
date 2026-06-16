@@ -34,6 +34,9 @@ const DEFAULTS = {
     connectTimeout: 10.0,
     executeTimeout: 60.0,
     sseReadTimeout: 120.0,
+    heartbeatInterval: 30.0,
+    maxReconnectAttempts: 3,
+    reconnectDelay: 1000,
   },
   TOOLS: {
     skillsDir: './skills',
@@ -42,6 +45,9 @@ const DEFAULTS = {
       connectTimeout: 10.0,
       executeTimeout: 60.0,
       sseReadTimeout: 120.0,
+      heartbeatInterval: 30.0,
+      maxReconnectAttempts: 3,
+      reconnectDelay: 1000,
     },
     security: {
       bash: {
@@ -68,6 +74,9 @@ const MCPSchema = z.object({
   connectTimeout: z.number().default(DEFAULTS.MCP.connectTimeout),
   executeTimeout: z.number().default(DEFAULTS.MCP.executeTimeout),
   sseReadTimeout: z.number().default(DEFAULTS.MCP.sseReadTimeout),
+  heartbeatInterval: z.number().default(DEFAULTS.MCP.heartbeatInterval),
+  maxReconnectAttempts: z.number().default(DEFAULTS.MCP.maxReconnectAttempts),
+  reconnectDelay: z.number().default(DEFAULTS.MCP.reconnectDelay),
 });
 
 const BashSecuritySchema = z.object({

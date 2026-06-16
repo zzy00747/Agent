@@ -1,4 +1,9 @@
 {
+  "mcp": {
+    "heartbeatInterval": 30.0,
+    "maxReconnectAttempts": 3,
+    "reconnectDelay": 1000
+  },
   "mcpServers": {
     "time-server": {
       "command": "uvx",

@@ -4,6 +4,7 @@ import { Logger } from '../../util/logger.js';
 import { type Tool } from '../base.js';
 import {
   type McpConfigFile,
+  type McpGlobalSettings,
   type McpServerConfig,
   type ConnectionType,
 } from './types.js';
@@ -16,6 +17,26 @@ export * from './utils.js';
 export * from './connection.js';
 
 const mcpConnections: MCPServerConnection[] = [];
+let cleanupRegistered = false;
+
+function registerCleanupHandlers(): void {
+  if (cleanupRegistered) return;
+  cleanupRegistered = true;
+
+  const cleanup = async (): Promise<void> => {
+    await cleanupMcpConnections();
+  };
+
+  process.on('exit', () => {
+    void cleanup();
+  });
+  process.on('SIGINT', () => {
+    void cleanup().finally(() => process.exit(0));
+  });
+  process.on('SIGTERM', () => {
+    void cleanup().finally(() => process.exit(0));
+  });
+}
 
 /**
  * Asynchronously loads MCPs from config file.
@@ -29,7 +50,8 @@ const mcpConnections: MCPServerConnection[] = [];
  * @returns A promise that resolves to an array of loaded `Tool` instances.
  */
 export async function loadMcpToolsAsync(
-  configPath: string = 'mcp.json'
+  configPath: string = 'mcp.json',
+  globalDefaults?: McpGlobalSettings
 ): Promise<Tool[]> {
   const resolvedPath = path.resolve(configPath);
   if (!fs.existsSync(resolvedPath)) {
@@ -48,6 +70,12 @@ export async function loadMcpToolsAsync(
     }
 
     const allTools: Tool[] = [];
+    registerCleanupHandlers();
+
+    // Global MCP settings may be defined alongside mcpServers.
+    const globalMcpSettings = isRecord(config.mcp)
+      ? (config.mcp as McpGlobalSettings)
+      : (globalDefaults ?? {});
 
     for (const [serverName, serverConfigValue] of Object.entries(servers)) {
       if (!isRecord(serverConfigValue)) {
@@ -88,9 +116,15 @@ export async function loadMcpToolsAsync(
         env: serverConfig.env,
         url: serverConfig.url,
         headers: serverConfig.headers,
-        connectTimeoutSec: serverConfig.connect_timeout,
-        executeTimeoutSec: serverConfig.execute_timeout,
-        sseReadTimeoutSec: serverConfig.sse_read_timeout,
+        connectTimeoutSec:
+          serverConfig.connect_timeout ?? globalMcpSettings['connectTimeout'],
+        executeTimeoutSec:
+          serverConfig.execute_timeout ?? globalMcpSettings['executeTimeout'],
+        sseReadTimeoutSec:
+          serverConfig.sse_read_timeout ?? globalMcpSettings['sseReadTimeout'],
+        heartbeatIntervalSec: globalMcpSettings['heartbeatInterval'],
+        maxReconnectAttempts: globalMcpSettings['maxReconnectAttempts'],
+        reconnectDelayMs: globalMcpSettings['reconnectDelay'],
       });
 
       const success = await connection.connect();

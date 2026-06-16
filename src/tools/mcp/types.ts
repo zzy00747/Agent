@@ -8,6 +8,15 @@ export interface MCPTimeoutConfig {
   sseReadTimeout: number;
 }
 
+export interface McpGlobalSettings {
+  connectTimeout?: number;
+  executeTimeout?: number;
+  sseReadTimeout?: number;
+  heartbeatInterval?: number;
+  maxReconnectAttempts?: number;
+  reconnectDelay?: number;
+}
+
 interface McpToolDefinition {
   name: string;
   description?: string;
@@ -33,6 +42,7 @@ export type McpClient = {
     arguments?: Record<string, unknown>;
   }) => Promise<McpCallToolResult>;
   close?: () => Promise<void>;
+  ping?: () => Promise<void>;
 };
 
 export type Closable = {
@@ -64,5 +74,6 @@ export interface McpServerConfig {
 }
 
 export interface McpConfigFile {
+  mcp?: McpGlobalSettings;
   mcpServers?: Record<string, McpServerConfig>;
 }

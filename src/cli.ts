@@ -303,7 +303,7 @@ async function runAgent(
 
   const mcpConfigPath = Config.findConfigFile(config.tools.mcpConfigPath);
   if (mcpConfigPath) {
-    const mcpTools = await loadMcpToolsAsync(mcpConfigPath);
+    const mcpTools = await loadMcpToolsAsync(mcpConfigPath, config.tools.mcp);
     if (mcpTools.length > 0) {
       tools.push(...mcpTools);
       const msg = `✅ Loaded ${mcpTools.length} MCP tools (from: ${mcpConfigPath})`;

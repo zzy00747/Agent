@@ -132,9 +132,12 @@ tools:
     connectTimeout: 10.0
     executeTimeout: 60.0
     sseReadTimeout: 120.0
+    heartbeatInterval: 30.0 # seconds, 0 disables keepalive
+    maxReconnectAttempts: 3
+    reconnectDelay: 1000 # milliseconds
 ```
 
-MCP servers are configured in `config/mcp.json` (copy from `config/mcp-example.json`). Supported connection types are `stdio`, `sse`, `http`, and `streamable_http`.
+MCP servers are configured in `config/mcp.json` (copy from `config/mcp-example.json`). Supported connection types are `stdio`, `sse`, `http`, and `streamable_http`. The connection manager sends periodic heartbeat pings, reconnects automatically on connection failures, and closes all connections on process exit.
 
 ## Build and Test Commands
 

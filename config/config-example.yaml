@@ -37,6 +37,9 @@ tools:
     connectTimeout: 10.0
     executeTimeout: 60.0
     sseReadTimeout: 120.0
+    heartbeatInterval: 30.0 # seconds, 0 to disable
+    maxReconnectAttempts: 3
+    reconnectDelay: 1000 # milliseconds
   security:
     bash:
       blockedPatterns: [] # Additional regex patterns to block
