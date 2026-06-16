@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
-import { glob } from 'fast-glob';
+import glob from 'fast-glob';
 import { truncateTextByTokens } from '../util/truncate.js';
 import type { Tool, ToolResult } from './base.js';
 
