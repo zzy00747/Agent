@@ -2,6 +2,13 @@ import type { Message, LLMStreamChunk } from '../schema/index.js';
 import type { Tool } from '../tools/index.js';
 import { Config, type RetryConfig } from '../config.js';
 
+export interface ConnectionCheckResult {
+  ok: boolean;
+  error?: string;
+  statusCode?: number;
+  details?: string;
+}
+
 export abstract class LLMClientBase {
   public apiKey: string;
   public apiBase: string;

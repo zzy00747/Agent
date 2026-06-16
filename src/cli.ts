@@ -216,11 +216,18 @@ async function runAgent(
 
   // Check connection
   process.stdout.write('Checking API connection... ');
-  const isConnected = await llmClient.checkConnection();
-  if (isConnected) {
+  const connection = await llmClient.checkConnection();
+  if (connection.ok) {
     console.log('✅ OK');
   } else {
-    console.log('❌ Failed (Check API Key/Network)');
+    console.log('❌ Failed');
+    console.log(`   Reason: ${connection.error ?? 'Unknown error'}`);
+    if (connection.details) {
+      console.log(`   Details: ${connection.details}`);
+    }
+    if (connection.statusCode) {
+      console.log(`   HTTP status: ${connection.statusCode}`);
+    }
   }
 
   // Load system prompt
@@ -318,7 +325,8 @@ async function runAgent(
     tools,
     config.agent.maxSteps,
     workspaceDir,
-    new TerminalAgentRenderer()
+    new TerminalAgentRenderer(),
+    config.llm.retry
   );
 
   // Session management

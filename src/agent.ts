@@ -2,7 +2,9 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Logger } from './util/logger.js';
 import { NoopRenderer, type AgentRenderer } from './util/agent-renderer.js';
+import { withRetry } from './util/retry.js';
 import { LLMClient } from './llm-client/llm-client.js';
+import type { RetryConfig } from './config.js';
 import type { Message, ToolCall } from './schema/index.js';
 import type { Tool, ToolResult } from './tools/index.js';
 
@@ -25,6 +27,7 @@ export class Agent {
   public workspaceDir: string;
   public tools: Map<string, Tool>;
   private renderer: AgentRenderer;
+  private retryConfig: RetryConfig;
 
   constructor(
     llmClient: LLMClient,
@@ -32,12 +35,14 @@ export class Agent {
     tools: Tool[],
     maxSteps: number,
     workspaceDir: string,
-    renderer?: AgentRenderer
+    renderer?: AgentRenderer,
+    retryConfig?: RetryConfig
   ) {
     this.llmClient = llmClient;
     this.maxSteps = maxSteps;
     this.tools = new Map();
     this.renderer = renderer ?? new NoopRenderer();
+    this.retryConfig = retryConfig ?? { enabled: true, maxRetries: 3 };
 
     // Ensure workspace exists
     this.workspaceDir = path.resolve(workspaceDir);
@@ -91,52 +96,110 @@ export class Agent {
       };
     }
 
-    try {
-      return await tool.execute(params);
-    } catch (error) {
-      const err = error as Error;
-      const details = err?.message ? err.message : String(error);
-      const stack = err?.stack ? `\n\nStack:\n${err.stack}` : '';
-      return {
-        success: false,
-        content: '',
-        error: `Tool execution failed: ${details}${stack}`,
-      };
+    const run = async (): Promise<ToolResult> => {
+      try {
+        return await tool.execute(params);
+      } catch (error) {
+        const err = error as Error;
+        const details = err?.message ? err.message : String(error);
+        const stack = err?.stack ? `\n\nStack:\n${err.stack}` : '';
+        return {
+          success: false,
+          content: '',
+          error: `Tool execution failed: ${details}${stack}`,
+        };
+      }
+    };
+
+    let result = await run();
+    if (
+      result.success ||
+      !result.retriable ||
+      !this.retryConfig.enabled ||
+      this.retryConfig.maxRetries <= 0
+    ) {
+      return result;
     }
+
+    for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
+      Logger.log(
+        'retry',
+        `Tool ${name} failed with retriable error, retrying (${attempt}/${this.retryConfig.maxRetries})`,
+        result.error ?? ''
+      );
+      result = await run();
+      if (result.success || !result.retriable) break;
+    }
+
+    return result;
   }
 
   async run(): Promise<string> {
     for (let step = 0; step < this.maxSteps; step++) {
       this.renderer.onStepStart(step + 1, this.maxSteps);
 
-      let fullContent = '';
-      let fullThinking = '';
-      let toolCalls: ToolCall[] | null = null;
-      let hasThinking = false;
-
       const toolList = this.listTools();
-      for await (const chunk of this.llmClient.generateStream(
-        this.messages,
-        toolList
-      )) {
-        if (chunk.thinking) {
-          this.renderer.onThinkingChunk(chunk.thinking);
-          fullThinking += chunk.thinking;
-          hasThinking = true;
-        }
 
-        if (chunk.content) {
-          if (fullContent === '') {
-            this.renderer.onResponseStart(hasThinking);
+      const runStream = async (): Promise<{
+        fullContent: string;
+        fullThinking: string;
+        toolCalls: ToolCall[] | null;
+        hasThinking: boolean;
+      }> => {
+        let content = '';
+        let thinking = '';
+        let calls: ToolCall[] | null = null;
+        let thinkingStarted = false;
+
+        for await (const chunk of this.llmClient.generateStream(
+          this.messages,
+          toolList
+        )) {
+          if (chunk.thinking) {
+            this.renderer.onThinkingChunk(chunk.thinking);
+            thinking += chunk.thinking;
+            thinkingStarted = true;
           }
-          this.renderer.onResponseChunk(chunk.content);
-          fullContent += chunk.content;
+
+          if (chunk.content) {
+            if (content === '') {
+              this.renderer.onResponseStart(thinkingStarted);
+            }
+            this.renderer.onResponseChunk(chunk.content);
+            content += chunk.content;
+          }
+
+          if (chunk.tool_calls) {
+            calls = chunk.tool_calls;
+          }
         }
 
-        if (chunk.tool_calls) {
-          toolCalls = chunk.tool_calls;
-        }
+        return {
+          fullContent: content,
+          fullThinking: thinking,
+          toolCalls: calls,
+          hasThinking: thinkingStarted,
+        };
+      };
+
+      let streamResult: Awaited<ReturnType<typeof runStream>>;
+
+      if (this.retryConfig.enabled && this.retryConfig.maxRetries > 0) {
+        streamResult = await withRetry(runStream, {
+          maxRetries: this.retryConfig.maxRetries,
+          onRetry: (error, attempt) => {
+            Logger.log(
+              'retry',
+              `LLM stream failed, retrying (${attempt}/${this.retryConfig.maxRetries})`,
+              error instanceof Error ? error.message : String(error)
+            );
+          },
+        });
+      } else {
+        streamResult = await runStream();
       }
+
+      const { fullContent, fullThinking, toolCalls } = streamResult;
 
       this.messages.push({
         role: 'assistant',
@@ -145,10 +208,10 @@ export class Agent {
         tool_calls: toolCalls || undefined,
       });
 
-      const hasToolCalls = !!(toolCalls && toolCalls.length > 0);
+      const hasToolCalls = toolCalls !== null && toolCalls.length > 0;
       this.renderer.onStepEnd(hasToolCalls);
 
-      if (!toolCalls || toolCalls.length === 0) {
+      if (!hasToolCalls) {
         this.renderer.onComplete(fullContent);
         return fullContent;
       }

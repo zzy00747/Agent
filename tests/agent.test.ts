@@ -52,6 +52,33 @@ class MockTool implements Tool<{ input: string }> {
   }
 }
 
+class FlakyTool implements Tool<{ input: string }> {
+  name = 'flaky_tool';
+  description = 'A mock tool that fails retriably then succeeds';
+  parameters = {
+    type: 'object' as const,
+    properties: {
+      input: { type: 'string', description: 'Input text' },
+    },
+    required: ['input'],
+  };
+
+  attempts = 0;
+
+  async execute(params: { input: string }): Promise<ToolResult> {
+    this.attempts += 1;
+    if (this.attempts < 3) {
+      return {
+        success: false,
+        content: '',
+        error: 'transient failure',
+        retriable: true,
+      };
+    }
+    return { success: true, content: `recovered: ${params.input}` };
+  }
+}
+
 function makeWorkspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-test-'));
 }
@@ -182,6 +209,128 @@ describe('Agent', () => {
 
     expect(result).toContain("couldn't be completed");
     expect(result).toContain('2');
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('retries retriable tool failures', async () => {
+    const workspace = makeWorkspace();
+    const flakyTool = new FlakyTool();
+    const toolCall: ToolCall = {
+      id: 'call-1',
+      type: 'function',
+      function: {
+        name: 'flaky_tool',
+        arguments: { input: 'test' },
+      },
+    };
+
+    const client = new MockLLMClient([
+      [{ tool_calls: [toolCall], done: true }],
+      [{ content: 'Done', done: true }],
+    ]);
+
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [flakyTool],
+      10,
+      workspace,
+      new NoopRenderer(),
+      { enabled: true, maxRetries: 3 }
+    );
+
+    agent.addUserMessage('Use flaky tool');
+    const result = await agent.run();
+
+    expect(result).toBe('Done');
+    expect(flakyTool.attempts).toBe(3);
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('does not retry non-retriable tool failures', async () => {
+    const workspace = makeWorkspace();
+    const toolCall: ToolCall = {
+      id: 'call-1',
+      type: 'function',
+      function: {
+        name: 'mock_tool',
+        arguments: { input: 'x' },
+      },
+    };
+
+    const client = new MockLLMClient([
+      [{ tool_calls: [toolCall], done: true }],
+      [{ content: 'Sorry', done: true }],
+    ]);
+
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [new MockTool()],
+      10,
+      workspace,
+      new NoopRenderer(),
+      { enabled: true, maxRetries: 3 }
+    );
+
+    agent.addUserMessage('Call tool');
+    const result = await agent.run();
+
+    expect(result).toBe('Sorry');
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('retries LLM stream failures', async () => {
+    const workspace = makeWorkspace();
+
+    class FlakyLLMClient extends LLMClientBase {
+      private attempts = 0;
+
+      constructor() {
+        super('fake-key', 'http://localhost', 'mock-model');
+      }
+
+      async *generateStream(): AsyncGenerator<{
+        content?: string;
+        thinking?: string;
+        tool_calls?: ToolCall[];
+        done: boolean;
+      }> {
+        this.attempts += 1;
+        if (this.attempts < 3) {
+          yield { content: 'partial', done: false };
+          throw new Error('stream broken');
+        }
+        yield { content: 'complete', done: true };
+      }
+
+      prepareRequest(): Record<string, unknown> {
+        return {};
+      }
+
+      convertMessages(messages: Message[]): [string | null, Record<string, unknown>[]] {
+        return [null, messages as Record<string, unknown>[]];
+      }
+    }
+
+    const client = new FlakyLLMClient();
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [new MockTool()],
+      10,
+      workspace,
+      new NoopRenderer(),
+      { enabled: true, maxRetries: 3 }
+    );
+
+    agent.addUserMessage('Hi');
+    const result = await agent.run();
+
+    expect(result).toBe('complete');
 
     fs.rmSync(workspace, { recursive: true, force: true });
   });

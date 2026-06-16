@@ -375,10 +375,10 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
               typeof (error as { code?: number }).code === 'number'
                 ? ((error as { code?: number }).code ?? -1)
                 : -1;
-            const errorMsg =
-              error.killed && error.signal === 'SIGTERM'
-                ? `Command timed out after ${timeout} seconds`
-                : `Command failed with exit code ${exitCode}`;
+            const isTimeout = error.killed && error.signal === 'SIGTERM';
+            const errorMsg = isTimeout
+              ? `Command timed out after ${timeout} seconds`
+              : `Command failed with exit code ${exitCode}`;
             resolve(
               buildResult({
                 success: false,
@@ -387,6 +387,7 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
                 stderr: stderr ?? errorMsg,
                 exit_code: exitCode,
                 bash_id: null,
+                retriable: isTimeout,
               })
             );
             return;

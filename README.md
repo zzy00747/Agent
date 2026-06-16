@@ -153,6 +153,22 @@ read_file(glob="src/**/*.ts")
 
 Large files are automatically chunked to ~8000 tokens when no `limit` is specified.
 
+### Retry and Diagnostics
+
+The agent automatically retries transient failures:
+
+- **Tool retries**: Tools can mark failures as `retriable` (e.g. command timeouts). The agent retries them up to `retry.maxRetries` times.
+- **LLM stream retries**: If the LLM stream is interrupted, the request is retried from the same messages.
+- **Connection diagnostics**: On startup, the agent checks the API connection and reports specific failure reasons (missing API key, authentication error, network error, model not found, etc.).
+
+Configure retry behavior:
+
+```yaml
+retry:
+  enabled: true
+  maxRetries: 3
+```
+
 ### MCP Servers
 
 Add external tools via MCP protocol:

@@ -23,6 +23,8 @@ export interface ToolResult {
   success: boolean;
   content: string;
   error?: string | null;
+  /** If true, the Agent may retry this tool execution on failure. */
+  retriable?: boolean;
 }
 
 /**
