@@ -154,6 +154,7 @@ export class OpenAIClient extends LLMClientBase {
             model: this.model,
             messages: apiMessages,
             stream: true,
+            stream_options: { include_usage: true },
           };
         if (toolSchemas && toolSchemas.length > 0) {
           (params as any).tools = toolSchemas;
@@ -183,12 +184,21 @@ export class OpenAIClient extends LLMClientBase {
     let finalFinishReason: string | undefined;
     let finalToolCalls: ToolCall[] | undefined;
     let chunkCount = 0;
+    let usage: {
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      total_tokens?: number;
+    } | null = null;
 
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta;
       const finishReason = chunk.choices[0]?.finish_reason;
 
       chunkCount++;
+
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
 
       // Accumulate content
       if (delta?.content) {
@@ -252,14 +262,30 @@ export class OpenAIClient extends LLMClientBase {
         });
       }
 
-      yield {
-        content: delta?.content || undefined,
-        thinking: (delta as any)?.reasoning || undefined,
-        tool_calls: finalToolCalls,
-        done: finishReason !== null && finishReason !== undefined,
-        finish_reason: finishReason || undefined,
-      };
+      // Stream content and thinking as they arrive; metadata (tool calls,
+      // usage, finish reason) is emitted in a final chunk below.
+      if (delta?.content || (delta as any)?.reasoning) {
+        yield {
+          content: delta?.content || undefined,
+          thinking: (delta as any)?.reasoning || undefined,
+          done: false,
+        };
+      }
     }
+
+    // Final metadata chunk: finish reason, accumulated tool calls, and usage.
+    yield {
+      done: true,
+      finish_reason: finalFinishReason || undefined,
+      tool_calls: finalToolCalls,
+      usage: usage
+        ? {
+            promptTokens: usage.prompt_tokens,
+            completionTokens: usage.completion_tokens,
+            totalTokens: usage.total_tokens,
+          }
+        : undefined,
+    };
 
     // Log full response after stream completes
     const fullResponse = {
@@ -268,6 +294,7 @@ export class OpenAIClient extends LLMClientBase {
       tool_calls: finalToolCalls || null,
       finishReason: finalFinishReason,
       chunkCount: chunkCount,
+      usage: usage ?? undefined,
     };
     Logger.logLLMResponse(fullResponse);
   }

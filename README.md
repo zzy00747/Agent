@@ -117,6 +117,7 @@ Common variables:
 | `MINI_AGENT_MODEL`                | Model name                        | Required |
 | `MINI_AGENT_PROVIDER`             | SDK type: `openai` or `anthropic` | `openai` |
 | `MINI_AGENT_ENABLE_LOGGING`       | Enable runtime logging            | `false`  |
+| `MINI_AGENT_VERBOSE`              | Enable verbose console output     | `false`  |
 | `MINI_AGENT_MAX_STEPS`            | Maximum execution steps           | `50`     |
 | `MINI_AGENT_RETRY__ENABLED`       | Enable retry mechanism            | `true`   |
 | `MINI_AGENT_RETRY__MAX_RETRIES`   | Maximum number of retries         | `3`      |
@@ -186,6 +187,21 @@ tools:
 history:
   autoSave: true
   maxHistoryTokens: 8000 # 0 = unlimited
+```
+
+### Observability
+
+- **Verbose mode**: Run with `--verbose` or set `verbose: true` / `MINI_AGENT_VERBOSE=true` to print detailed logs and stats to the console.
+- **Per-step timing**: Each ReAct step reports LLM, tool, and total duration.
+- **Token usage**: When the provider returns usage metadata, the agent reports prompt / completion / total tokens per step.
+
+```bash
+mini-agent-ts --verbose
+```
+
+```yaml
+enableLogging: true # Write structured logs to project-root/logs/
+verbose: true       # Also mirror logs to the console
 ```
 
 ### MCP Connection Management

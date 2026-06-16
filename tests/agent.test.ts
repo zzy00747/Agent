@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { Agent } from '../src/agent.js';
 import { NoopRenderer } from '../src/util/agent-renderer.js';
 import { LLMClientBase } from '../src/llm-client/llm-client-base.js';
-import type { Message, LLMStreamChunk, ToolCall } from '../src/schema/index.js';
+import type {
+  Message,
+  LLMStreamChunk,
+  ToolCall,
+  StepStats,
+} from '../src/schema/index.js';
 import type { Tool, ToolResult } from '../src/tools/base.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -81,6 +86,14 @@ class FlakyTool implements Tool<{ input: string }> {
 
 function makeWorkspace(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'agent-test-'));
+}
+
+class CapturingRenderer extends NoopRenderer {
+  stats: StepStats[] = [];
+
+  override onStepStats(stats: StepStats): void {
+    this.stats.push(stats);
+  }
 }
 
 describe('Agent', () => {
@@ -457,6 +470,61 @@ describe('Agent', () => {
     const result = await agent.run();
 
     expect(result).toBe('complete');
+
+    fs.rmSync(workspace, { recursive: true, force: true });
+  });
+
+  it('reports step timing and usage stats', async () => {
+    const workspace = makeWorkspace();
+    const toolCall: ToolCall = {
+      id: 'call-1',
+      type: 'function',
+      function: {
+        name: 'mock_tool',
+        arguments: { input: 'stats' },
+      },
+    };
+
+    const client = new MockLLMClient([
+      [
+        { content: 'thinking...', thinking: 'reasoning...', done: false },
+        {
+          tool_calls: [toolCall],
+          done: true,
+          usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
+        },
+      ],
+      [{ content: 'Done', done: true }],
+    ]);
+
+    const renderer = new CapturingRenderer();
+    const agent = new Agent(
+      client,
+      'You are a test agent.',
+      [new MockTool()],
+      10,
+      workspace,
+      renderer
+    );
+
+    agent.addUserMessage('Use the tool');
+    const result = await agent.run();
+
+    expect(result).toBe('Done');
+    expect(renderer.stats.length).toBeGreaterThanOrEqual(1);
+
+    const firstStats = renderer.stats[0];
+    expect(firstStats.step).toBe(1);
+    expect(firstStats.llmMs).toBeGreaterThanOrEqual(0);
+    expect(firstStats.toolsMs).toBeGreaterThanOrEqual(0);
+    expect(firstStats.totalMs).toBeGreaterThanOrEqual(
+      firstStats.llmMs + firstStats.toolsMs
+    );
+    expect(firstStats.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+    });
 
     fs.rmSync(workspace, { recursive: true, force: true });
   });

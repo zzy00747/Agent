@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 export class Logger {
   private static logFile: string | null = null;
+  private static isVerbose = false;
+
+  static setVerbose(verbose: boolean): void {
+    this.isVerbose = verbose;
+  }
 
   static initialize(logDir?: string) {
     const logsDir = logDir ?? this.getLogsDirectory();
@@ -44,6 +49,11 @@ export class Logger {
     // Write to file if initialized
     if (this.logFile) {
       fs.appendFileSync(this.logFile, fileEntry);
+    }
+
+    // Mirror to console when verbose mode is enabled
+    if (this.isVerbose) {
+      console.log(fileEntry.trim());
     }
   }
 

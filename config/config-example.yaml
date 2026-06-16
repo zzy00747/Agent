@@ -19,6 +19,7 @@ provider: 'openai' # MiniMax uses OpenAI-style authentication
 
 # ===== Logging Configuration =====
 enableLogging: false # Enable file logging to project-root/logs/
+verbose: false       # Also mirror logs to the console (also --verbose CLI flag)
 
 # ===== Agent Configuration =====
 maxSteps: 100 # Maximum execution steps

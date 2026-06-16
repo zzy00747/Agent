@@ -9,7 +9,7 @@ import {
 import { withRetry } from './util/retry.js';
 import { LLMClient } from './llm-client/llm-client.js';
 import type { RetryConfig } from './config.js';
-import type { Message, ToolCall } from './schema/index.js';
+import type { Message, ToolCall, LLMUsage, StepStats } from './schema/index.js';
 import type { Tool, ToolResult } from './tools/index.js';
 
 function buildSystemPrompt(basePrompt: string, workspaceDir: string): string {
@@ -90,6 +90,29 @@ export class Agent {
     return Array.from(this.tools.values());
   }
 
+  private mergeUsage(
+    current: LLMUsage,
+    incoming: LLMUsage | undefined
+  ): LLMUsage {
+    if (!incoming) {
+      return current;
+    }
+    return {
+      promptTokens: (current.promptTokens ?? 0) + (incoming.promptTokens ?? 0),
+      completionTokens:
+        (current.completionTokens ?? 0) + (incoming.completionTokens ?? 0),
+      totalTokens: (current.totalTokens ?? 0) + (incoming.totalTokens ?? 0),
+    };
+  }
+
+  private hasUsage(usage: LLMUsage): boolean {
+    return (
+      (usage.promptTokens ?? 0) > 0 ||
+      (usage.completionTokens ?? 0) > 0 ||
+      (usage.totalTokens ?? 0) > 0
+    );
+  }
+
   async executeTool(
     name: string,
     params: Record<string, unknown>
@@ -144,12 +167,14 @@ export class Agent {
   async run(): Promise<string> {
     for (let step = 0; step < this.maxSteps; step++) {
       this.renderer.onStepStart(step + 1, this.maxSteps);
+      const stepStart = performance.now();
 
       // Enforce context budgets before each LLM call. Large tool results live
       // outside the system prompt and are truncated/compressed here.
       this.messages = prepareMessages(this.messages, this.contextOptions);
 
       const toolList = this.listTools();
+      let stepUsage: LLMUsage = {};
 
       const runStream = async (): Promise<{
         fullContent: string;
@@ -166,6 +191,10 @@ export class Agent {
           this.messages,
           toolList
         )) {
+          if (chunk.usage) {
+            stepUsage = this.mergeUsage(stepUsage, chunk.usage);
+          }
+
           if (chunk.thinking) {
             this.renderer.onThinkingChunk(chunk.thinking);
             thinking += chunk.thinking;
@@ -194,6 +223,7 @@ export class Agent {
       };
 
       let streamResult: Awaited<ReturnType<typeof runStream>>;
+      const llmStart = performance.now();
 
       if (this.retryConfig.enabled && this.retryConfig.maxRetries > 0) {
         streamResult = await withRetry(runStream, {
@@ -210,6 +240,7 @@ export class Agent {
         streamResult = await runStream();
       }
 
+      const llmMs = performance.now() - llmStart;
       const { fullContent, fullThinking, toolCalls } = streamResult;
 
       this.messages.push({
@@ -229,6 +260,7 @@ export class Agent {
 
       // Execute independent tool calls concurrently while preserving the
       // original declaration order in the conversation history.
+      const toolsStart = performance.now();
       const toolResults = await Promise.all(
         toolCalls.map(async (toolCall) => {
           const toolCallId = toolCall.id;
@@ -246,6 +278,7 @@ export class Agent {
           };
         })
       );
+      const toolsMs = performance.now() - toolsStart;
 
       for (const { toolCallId, functionName, result } of toolResults) {
         this.messages.push({
@@ -257,6 +290,17 @@ export class Agent {
           tool_name: functionName,
         });
       }
+
+      const totalMs = performance.now() - stepStart;
+      const stats: StepStats = {
+        step: step + 1,
+        llmMs,
+        toolsMs,
+        totalMs,
+        usage: this.hasUsage(stepUsage) ? stepUsage : undefined,
+      };
+      this.renderer.onStepStats(stats);
+      Logger.log('stats', 'Step timing and usage', stats);
     }
 
     const message = `Task couldn't be completed after ${this.maxSteps} steps.`;

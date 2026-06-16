@@ -9,6 +9,8 @@ import { Colors, drawStepHeader } from './terminal.js';
  * Keeping this interface pure allows the same Agent core to drive a terminal UI,
  * a web UI, a silent test runner, or a logging backend.
  */
+import type { StepStats } from '../schema/schema.js';
+
 export interface AgentRenderer {
   onStepStart(step: number, maxSteps: number): void;
   onThinkingStart(): void;
@@ -18,6 +20,7 @@ export interface AgentRenderer {
   onToolCall(name: string, args: Record<string, unknown>): void;
   onToolResult(name: string, result: ToolResult): void;
   onStepEnd(hasToolCalls: boolean): void;
+  onStepStats(stats: StepStats): void;
   onComplete(response: string): void;
   onMaxStepsReached(maxSteps: number): void;
 }
@@ -35,6 +38,7 @@ export class NoopRenderer implements AgentRenderer {
   onToolCall(): void {}
   onToolResult(): void {}
   onStepEnd(): void {}
+  onStepStats(): void {}
   onComplete(): void {}
   onMaxStepsReached(): void {}
 }
@@ -51,6 +55,8 @@ const MAX_DISPLAY_RESULT_TOKENS = 75; // ≈ 300 characters
 export class TerminalAgentRenderer implements AgentRenderer {
   private isThinkingPrinted = false;
   private isResponsePrinted = false;
+
+  constructor(private verbose = false) {}
 
   onStepStart(step: number, maxSteps: number): void {
     console.log();
@@ -142,6 +148,21 @@ export class TerminalAgentRenderer implements AgentRenderer {
     }
     this.isThinkingPrinted = false;
     this.isResponsePrinted = false;
+  }
+
+  onStepStats(stats: StepStats): void {
+    if (!this.verbose) {
+      return;
+    }
+
+    const usage = stats.usage;
+    const usageText = usage
+      ? ` | tokens: ${usage.promptTokens ?? '-'} / ${usage.completionTokens ?? '-'} / ${usage.totalTokens ?? '-'}`
+      : '';
+
+    console.log(
+      `${Colors.DIM}⏱ Step ${stats.step}: LLM ${stats.llmMs.toFixed(0)}ms · tools ${stats.toolsMs.toFixed(0)}ms · total ${stats.totalMs.toFixed(0)}ms${usageText}${Colors.RESET}`
+    );
   }
 
   onComplete(response: string): void {

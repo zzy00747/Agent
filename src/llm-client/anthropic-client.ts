@@ -222,6 +222,8 @@ export class AnthropicClient extends LLMClientBase {
     let chunkCount = 0;
     let finishReason: string | undefined;
     const accumulatedToolCalls: ToolCall[] = [];
+    let promptTokens: number | undefined;
+    let completionTokens: number | undefined;
 
     // Temporary buffer to assemble tool JSON strings
     let currentToolCall: {
@@ -307,15 +309,29 @@ export class AnthropicClient extends LLMClientBase {
         }
       }
 
-      // Capture metadata updates
-      else if (event.type === 'message_delta') {
+      // Capture usage and metadata updates
+      else if (event.type === 'message_start') {
+        const inputTokens = (event.message as any)?.usage?.input_tokens;
+        if (typeof inputTokens === 'number') {
+          promptTokens = inputTokens;
+        }
+      } else if (event.type === 'message_delta') {
         if (event.delta.stop_reason) {
           finishReason = event.delta.stop_reason;
         }
+        const outputTokens = (event.usage as any)?.output_tokens;
+        if (typeof outputTokens === 'number') {
+          completionTokens = outputTokens;
+        }
       }
 
-      // Dispatch all accumulated tool calls in the final chunk
+      // Dispatch all accumulated tool calls and usage in the final chunk
       else if (event.type === 'message_stop') {
+        const totalTokens =
+          promptTokens !== undefined && completionTokens !== undefined
+            ? promptTokens + completionTokens
+            : undefined;
+
         yield {
           content: undefined,
           thinking: undefined,
@@ -323,6 +339,14 @@ export class AnthropicClient extends LLMClientBase {
             accumulatedToolCalls.length > 0 ? accumulatedToolCalls : undefined,
           done: true,
           finish_reason: finishReason || 'end_turn',
+          usage:
+            promptTokens !== undefined || completionTokens !== undefined
+              ? {
+                  promptTokens,
+                  completionTokens,
+                  totalTokens,
+                }
+              : undefined,
         };
       }
     }
@@ -334,6 +358,17 @@ export class AnthropicClient extends LLMClientBase {
       tool_calls: accumulatedToolCalls.length > 0 ? accumulatedToolCalls : null,
       finishReason: finishReason,
       chunkCount: chunkCount,
+      usage:
+        promptTokens !== undefined || completionTokens !== undefined
+          ? {
+              promptTokens,
+              completionTokens,
+              totalTokens:
+                promptTokens !== undefined && completionTokens !== undefined
+                  ? promptTokens + completionTokens
+                  : undefined,
+            }
+          : undefined,
     });
   }
 }

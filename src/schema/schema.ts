@@ -48,10 +48,25 @@ interface ContentBlock {
   [key: string]: unknown;
 }
 
+export interface LLMUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
+export interface StepStats {
+  step: number;
+  llmMs: number;
+  toolsMs: number;
+  totalMs: number;
+  usage?: LLMUsage;
+}
+
 export interface LLMStreamChunk {
   content?: string;
   thinking?: string;
   tool_calls?: ToolCall[];
   finish_reason?: string;
   done: boolean;
+  usage?: LLMUsage;
 }

@@ -45,6 +45,7 @@ describe('Config', () => {
     expect(config.history.maxHistoryTokens).toBe(0);
     expect(config.tools.maxToolResultTokens).toBe(8000);
     expect(config.tools.security.bash.allowDangerousCommands).toBe(false);
+    expect(config.logging.verbose).toBe(false);
   });
 
   it('parses custom values', () => {
@@ -57,6 +58,7 @@ describe('Config', () => {
         "model: 'custom-model'",
         "provider: 'openai'",
         'enableLogging: true',
+        'verbose: true',
         'maxSteps: 20',
         'retry:',
         '  enabled: false',
@@ -79,6 +81,7 @@ describe('Config', () => {
     expect(config.llm.model).toBe('custom-model');
     expect(config.llm.apiBase).toBe('https://custom.example/');
     expect(config.logging.enableLogging).toBe(true);
+    expect(config.logging.verbose).toBe(true);
     expect(config.agent.maxSteps).toBe(20);
     expect(config.llm.retry.enabled).toBe(false);
     expect(config.llm.retry.maxRetries).toBe(1);
@@ -157,11 +160,13 @@ describe('Config', () => {
   it('converts boolean and numeric env values', () => {
     process.env['MINI_AGENT_API_KEY'] = 'env-key';
     process.env['MINI_AGENT_ENABLE_LOGGING'] = 'true';
+    process.env['MINI_AGENT_VERBOSE'] = 'true';
     process.env['MINI_AGENT_MAX_STEPS'] = '42';
 
     const config = Config.load();
 
     expect(config.logging.enableLogging).toBe(true);
+    expect(config.logging.verbose).toBe(true);
     expect(config.agent.maxSteps).toBe(42);
   });
 });

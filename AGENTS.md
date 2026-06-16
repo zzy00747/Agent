@@ -120,6 +120,7 @@ apiBase: 'https://api.minimaxi.com/v1/'
 model: 'MiniMax-M2.5'
 provider: 'openai'   # or 'anthropic'
 enableLogging: false
+verbose: false      # Verbose console output (also --verbose CLI flag)
 maxSteps: 100
 systemPromptPath: 'system_prompt.md'
 retry:
@@ -141,6 +142,13 @@ tools:
 MCP servers are configured in `config/mcp.json` (copy from `config/mcp-example.json`). Supported connection types are `stdio`, `sse`, `http`, and `streamable_http`. The connection manager sends periodic heartbeat pings, reconnects automatically on connection failures, and closes all connections on process exit.
 
 Before every LLM call, the agent prepares the message context: oversized `tool` results are truncated to `tools.maxToolResultTokens`, and the full history is compressed if it exceeds `history.maxHistoryTokens`. Because tool results are non-system messages, they can be compressed/dropped by the history manager rather than living forever in the system prompt. Multiple tool calls requested in a single assistant message are executed concurrently, with results pushed in declaration order.
+
+### Observability
+
+- Run with `--verbose` (or set `verbose: true` / `MINI_AGENT_VERBOSE=true`) to mirror logs to the console.
+- Each ReAct step emits `StepStats` (LLM/tools/total timing) via the `AgentRenderer` and `Logger`.
+- `LLMStreamChunk` carries optional `usage` metadata. OpenAI-compatible providers can return usage via `stream_options: { include_usage: true }`; Anthropic reports usage through `message_start`/`message_delta` events. The agent aggregates per-step token counts when available.
+- `enableLogging: true` writes structured logs to `logs/agent-<timestamp>.log` regardless of verbose mode.
 
 ## Build and Test Commands
 

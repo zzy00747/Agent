@@ -5,4 +5,6 @@ export {
   type ToolCall,
   type Message,
   type LLMStreamChunk,
+  type LLMUsage,
+  type StepStats,
 } from './schema.js';

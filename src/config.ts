@@ -29,6 +29,7 @@ const DEFAULTS = {
   },
   LOGGING: {
     enableLogging: false,
+    verbose: false,
   },
   MCP: {
     connectTimeout: 10.0,
@@ -113,6 +114,11 @@ const HistorySchema = z.object({
   maxHistoryTokens: z.number().default(DEFAULTS.HISTORY.maxHistoryTokens),
 });
 
+const LoggingSchema = z.object({
+  enableLogging: z.boolean().default(DEFAULTS.LOGGING.enableLogging),
+  verbose: z.boolean().default(DEFAULTS.LOGGING.verbose),
+});
+
 const ConfigSchema = z
   .object({
     apiKey: z.string().min(1, 'Please configure a valid API Key'),
@@ -120,7 +126,12 @@ const ConfigSchema = z
     model: z.string().default(DEFAULTS.LLM.model),
     provider: z.enum(['anthropic', 'openai']).default(DEFAULTS.LLM.provider),
 
-    enableLogging: z.boolean().default(DEFAULTS.LOGGING.enableLogging),
+    // Backwards-compatible top-level logging flags (also support env vars like
+    // MINI_AGENT_ENABLE_LOGGING and MINI_AGENT_VERBOSE).
+    enableLogging: z.boolean().optional(),
+    verbose: z.boolean().optional(),
+
+    logging: LoggingSchema.default(DEFAULTS.LOGGING),
 
     retry: RetrySchema.default(DEFAULTS.RETRY),
 
@@ -139,7 +150,11 @@ const ConfigSchema = z
       retry: data.retry,
     },
     logging: {
-      enableLogging: data.enableLogging,
+      enableLogging:
+        data.enableLogging ??
+        data.logging.enableLogging ??
+        DEFAULTS.LOGGING.enableLogging,
+      verbose: data.verbose ?? data.logging.verbose ?? DEFAULTS.LOGGING.verbose,
     },
     agent: {
       maxSteps: data.maxSteps,
