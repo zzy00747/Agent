@@ -118,6 +118,7 @@ Common variables:
 | `MINI_AGENT_PROVIDER`             | SDK type: `openai` or `anthropic` | `openai` |
 | `MINI_AGENT_ENABLE_LOGGING`       | Enable runtime logging            | `false`  |
 | `MINI_AGENT_VERBOSE`              | Enable verbose console output     | `false`  |
+| `MINI_AGENT_OUTPUT_FORMAT`        | Output format: `markdown` or `text` | `markdown` |
 | `MINI_AGENT_MAX_STEPS`            | Maximum execution steps           | `50`     |
 | `MINI_AGENT_RETRY__ENABLED`       | Enable retry mechanism            | `true`   |
 | `MINI_AGENT_RETRY__MAX_RETRIES`   | Maximum number of retries         | `3`      |
@@ -203,6 +204,20 @@ mini-agent-ts --verbose
 enableLogging: true # Write structured logs to project-root/logs/
 verbose: true       # Also mirror logs to the console
 ```
+
+### Output Format
+
+By default the agent prints the LLM's raw output (often Markdown). Use `--text` or set `outputFormat: text` to strip Markdown syntax and render plain text:
+
+```bash
+mini-agent-ts --text
+```
+
+```yaml
+outputFormat: text # or 'markdown'
+```
+
+Supported Markdown elements that are stripped in text mode: headings, bold/italic, inline/fenced code, links, images, lists, blockquotes, and horizontal rules.
 
 ### MCP Connection Management
 

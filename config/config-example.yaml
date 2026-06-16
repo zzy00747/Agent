@@ -21,6 +21,9 @@ provider: 'openai' # MiniMax uses OpenAI-style authentication
 enableLogging: false # Enable file logging to project-root/logs/
 verbose: false       # Also mirror logs to the console (also --verbose CLI flag)
 
+# ===== Output Format =====
+outputFormat: markdown # Set to 'text' to strip Markdown from terminal output
+
 # ===== Agent Configuration =====
 maxSteps: 100 # Maximum execution steps
 systemPromptPath: 'system_prompt.md' # System prompt file (same config directory)

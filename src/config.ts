@@ -26,6 +26,7 @@ const DEFAULTS = {
   AGENT: {
     maxSteps: 50,
     systemPromptPath: 'system_prompt.md',
+    outputFormat: 'markdown' as const,
   },
   LOGGING: {
     enableLogging: false,
@@ -114,6 +115,8 @@ const HistorySchema = z.object({
   maxHistoryTokens: z.number().default(DEFAULTS.HISTORY.maxHistoryTokens),
 });
 
+const OutputFormatSchema = z.enum(['markdown', 'text']);
+
 const LoggingSchema = z.object({
   enableLogging: z.boolean().default(DEFAULTS.LOGGING.enableLogging),
   verbose: z.boolean().default(DEFAULTS.LOGGING.verbose),
@@ -137,6 +140,7 @@ const ConfigSchema = z
 
     maxSteps: z.number().default(DEFAULTS.AGENT.maxSteps),
     systemPromptPath: z.string().default(DEFAULTS.AGENT.systemPromptPath),
+    outputFormat: OutputFormatSchema.default(DEFAULTS.AGENT.outputFormat),
 
     tools: ToolsSchema.default(DEFAULTS.TOOLS),
     history: HistorySchema.default(DEFAULTS.HISTORY),
@@ -159,6 +163,7 @@ const ConfigSchema = z
     agent: {
       maxSteps: data.maxSteps,
       systemPromptPath: data.systemPromptPath,
+      outputFormat: data.outputFormat ?? DEFAULTS.AGENT.outputFormat,
     },
     tools: data.tools,
     history: data.history,

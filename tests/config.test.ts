@@ -46,6 +46,7 @@ describe('Config', () => {
     expect(config.tools.maxToolResultTokens).toBe(8000);
     expect(config.tools.security.bash.allowDangerousCommands).toBe(false);
     expect(config.logging.verbose).toBe(false);
+    expect(config.agent.outputFormat).toBe('markdown');
   });
 
   it('parses custom values', () => {
@@ -59,6 +60,7 @@ describe('Config', () => {
         "provider: 'openai'",
         'enableLogging: true',
         'verbose: true',
+        'outputFormat: text',
         'maxSteps: 20',
         'retry:',
         '  enabled: false',
@@ -82,6 +84,7 @@ describe('Config', () => {
     expect(config.llm.apiBase).toBe('https://custom.example/');
     expect(config.logging.enableLogging).toBe(true);
     expect(config.logging.verbose).toBe(true);
+    expect(config.agent.outputFormat).toBe('text');
     expect(config.agent.maxSteps).toBe(20);
     expect(config.llm.retry.enabled).toBe(false);
     expect(config.llm.retry.maxRetries).toBe(1);

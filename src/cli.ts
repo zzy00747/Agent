@@ -118,6 +118,7 @@ function parseArgs(): {
   workspace: string | undefined;
   resume: string | undefined;
   verbose: boolean;
+  text: boolean;
 } {
   const program = new Command();
 
@@ -132,6 +133,7 @@ Examples:
   mini-agent-ts --workspace /path/to/dir     # Use specific workspace directory
   mini-agent-ts --resume <session-id>        # Resume a previous session
   mini-agent-ts --verbose                    # Enable verbose console logging
+  mini-agent-ts --text                       # Render output as plain text
       `
     );
 
@@ -144,6 +146,7 @@ Examples:
     'Resume a previous conversation session'
   );
   program.option('--verbose', 'Enable verbose console logging');
+  program.option('--text', 'Render output as plain text instead of Markdown');
 
   program.parse(process.argv);
   const options = program.opts();
@@ -152,6 +155,7 @@ Examples:
     workspace: options['workspace'] as string | undefined,
     resume: options['resume'] as string | undefined,
     verbose: Boolean(options['verbose']),
+    text: Boolean(options['text']),
   };
 }
 
@@ -177,7 +181,8 @@ function resolveWorkspace(args: { workspace: string | undefined }): string {
 async function runAgent(
   workspaceDir: string,
   resumeSessionId: string | undefined,
-  verbose: boolean
+  verbose: boolean,
+  text: boolean
 ): Promise<void> {
   // Load configuration (env vars override YAML file)
   const configPath = Config.findConfigFile('config.yaml');
@@ -332,7 +337,10 @@ async function runAgent(
     tools,
     config.agent.maxSteps,
     workspaceDir,
-    new TerminalAgentRenderer(isVerbose),
+    new TerminalAgentRenderer(
+      isVerbose,
+      text || config.agent.outputFormat === 'text' ? 'text' : 'markdown'
+    ),
     config.llm.retry,
     {
       maxToolResultTokens: config.tools.maxToolResultTokens,
@@ -445,5 +453,5 @@ export async function run(): Promise<void> {
     process.exit(1);
   }
 
-  await runAgent(workspaceDir, args.resume, args.verbose);
+  await runAgent(workspaceDir, args.resume, args.verbose, args.text);
 }

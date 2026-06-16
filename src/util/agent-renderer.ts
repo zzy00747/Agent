@@ -10,6 +10,9 @@ import { Colors, drawStepHeader } from './terminal.js';
  * a web UI, a silent test runner, or a logging backend.
  */
 import type { StepStats } from '../schema/schema.js';
+import { stripMarkdown } from './markdown.js';
+
+export type OutputFormat = 'markdown' | 'text';
 
 export interface AgentRenderer {
   onStepStart(step: number, maxSteps: number): void;
@@ -56,7 +59,14 @@ export class TerminalAgentRenderer implements AgentRenderer {
   private isThinkingPrinted = false;
   private isResponsePrinted = false;
 
-  constructor(private verbose = false) {}
+  constructor(
+    private verbose = false,
+    private format: OutputFormat = 'markdown'
+  ) {}
+
+  private formatText(text: string): string {
+    return this.format === 'text' ? stripMarkdown(text) : text;
+  }
 
   onStepStart(step: number, maxSteps: number): void {
     console.log();
@@ -77,7 +87,7 @@ export class TerminalAgentRenderer implements AgentRenderer {
       );
       this.isThinkingPrinted = true;
     }
-    process.stdout.write(chunk);
+    process.stdout.write(this.formatText(chunk));
   }
 
   onResponseStart(hasThinking: boolean): void {
@@ -99,7 +109,7 @@ export class TerminalAgentRenderer implements AgentRenderer {
   }
 
   onResponseChunk(chunk: string): void {
-    process.stdout.write(chunk);
+    process.stdout.write(this.formatText(chunk));
   }
 
   onToolCall(name: string, args: Record<string, unknown>): void {
@@ -125,13 +135,13 @@ export class TerminalAgentRenderer implements AgentRenderer {
 
   onToolResult(_name: string, result: ToolResult): void {
     if (result.success) {
-      const resultText = truncateTextByTokens(
-        result.content,
-        MAX_DISPLAY_RESULT_TOKENS,
-        'tail'
+      const resultText = this.formatText(
+        truncateTextByTokens(result.content, MAX_DISPLAY_RESULT_TOKENS, 'tail')
       );
       const suffix =
-        resultText === result.content ? '' : `${Colors.DIM}...${Colors.RESET}`;
+        resultText === this.formatText(result.content)
+          ? ''
+          : `${Colors.DIM}...${Colors.RESET}`;
       console.log(
         `${Colors.BRIGHT_GREEN}✓${Colors.RESET} ${Colors.BOLD}${Colors.BRIGHT_GREEN}Success:${Colors.RESET} ${resultText}${suffix}\n`
       );

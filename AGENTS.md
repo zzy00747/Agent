@@ -121,6 +121,7 @@ model: 'MiniMax-M2.5'
 provider: 'openai'   # or 'anthropic'
 enableLogging: false
 verbose: false      # Verbose console output (also --verbose CLI flag)
+outputFormat: markdown # or 'text' for plain-text rendering
 maxSteps: 100
 systemPromptPath: 'system_prompt.md'
 retry:
@@ -149,6 +150,7 @@ Before every LLM call, the agent prepares the message context: oversized `tool` 
 - Each ReAct step emits `StepStats` (LLM/tools/total timing) via the `AgentRenderer` and `Logger`.
 - `LLMStreamChunk` carries optional `usage` metadata. OpenAI-compatible providers can return usage via `stream_options: { include_usage: true }`; Anthropic reports usage through `message_start`/`message_delta` events. The agent aggregates per-step token counts when available.
 - `enableLogging: true` writes structured logs to `logs/agent-<timestamp>.log` regardless of verbose mode.
+- `outputFormat: text` (or `--text`) strips Markdown from streamed response chunks and tool-result previews before printing to the terminal.
 
 ## Build and Test Commands
 
