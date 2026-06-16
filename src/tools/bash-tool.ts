@@ -307,10 +307,12 @@ export class BashTool implements Tool<BashInput, BashOutputResult> {
   async execute(params: BashInput): Promise<BashOutputResult> {
     const validation = this.guard.validate(params.command);
     if (!validation.allowed) {
+      const reason = validation.reason ?? 'Command blocked by security policy.';
       return buildResult({
         success: false,
+        error: reason,
         stdout: '',
-        stderr: validation.reason ?? 'Command blocked by security policy.',
+        stderr: reason,
         exit_code: -1,
         bash_id: null,
       });
