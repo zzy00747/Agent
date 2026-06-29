@@ -29,7 +29,7 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/Code-MonkeyZhang/mini-agent-ts.git
+git clone https://github.com/zzy00747/Agent.git
 cd mini-agent-ts
 
 # Install dependencies
@@ -322,6 +322,4 @@ Issues and Pull Requests are welcome!
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Agent Skills](https://agentskills.io)
 
----
-
-### Made with ❤️ by [Code-MonkeyZhang](https://github.com/Code-MonkeyZhang)
+### 

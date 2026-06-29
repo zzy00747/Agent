@@ -58,7 +58,7 @@ mini-agent-ts/
 
 ```bash
 # 克隆仓库
-git clone [https://github.com/Code-MonkeyZhang/mini-agent-ts.git](https://github.com/Code-MonkeyZhang/mini-agent-ts.git)
+git clone https://github.com/zzy00747/Agent.git
 
 # 进入项目目录
 cd mini-agent-ts
@@ -141,10 +141,6 @@ tools:
 ## 🤝 贡献与反馈
 
 欢迎提交 Issue 或 Pull Request 来完善这个项目。
-
-### Made with ❤️ by Code-MonkeyZhang
-
----
 
 ## 📚 参考文档
 
